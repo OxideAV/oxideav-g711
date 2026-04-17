@@ -73,14 +73,15 @@ pub fn encode_sample(sample: i16) -> u8 {
 
 pub(crate) fn make_decoder(params: &CodecParameters) -> Result<Box<dyn Decoder>> {
     let channels = params.channels.unwrap_or(1);
-    if channels != 1 {
-        return Err(Error::unsupported(format!(
-            "G.711 A-law decoder: only mono is supported (got {channels} channels)"
-        )));
+    if channels == 0 {
+        return Err(Error::unsupported(
+            "G.711 A-law decoder: channel count must be >= 1",
+        ));
     }
     let sample_rate = params.sample_rate.unwrap_or(8_000);
     Ok(Box::new(AlawDecoder {
         codec_id: params.codec_id.clone(),
+        channels,
         sample_rate,
         time_base: TimeBase::new(1, sample_rate as i64),
         pending: None,
@@ -90,6 +91,7 @@ pub(crate) fn make_decoder(params: &CodecParameters) -> Result<Box<dyn Decoder>>
 
 pub struct AlawDecoder {
     codec_id: CodecId,
+    channels: u16,
     sample_rate: u32,
     time_base: TimeBase,
     pending: Option<Packet>,
@@ -122,7 +124,7 @@ impl Decoder for AlawDecoder {
         if pkt.data.is_empty() {
             return Ok(Frame::Audio(AudioFrame {
                 format: SampleFormat::S16,
-                channels: 1,
+                channels: self.channels,
                 sample_rate: self.sample_rate,
                 samples: 0,
                 pts: pkt.pts,
@@ -130,17 +132,24 @@ impl Decoder for AlawDecoder {
                 data: vec![Vec::new()],
             }));
         }
-        let samples = pkt.data.len();
-        let mut out = Vec::with_capacity(samples * 2);
+        let ch = self.channels as usize;
+        if pkt.data.len() % ch != 0 {
+            return Err(Error::invalid(format!(
+                "G.711 A-law decoder: packet length {} is not a multiple of channel count {ch}",
+                pkt.data.len()
+            )));
+        }
+        let samples_per_channel = pkt.data.len() / ch;
+        let mut out = Vec::with_capacity(pkt.data.len() * 2);
         for &b in &pkt.data {
             let s = decode_sample(b);
             out.extend_from_slice(&s.to_le_bytes());
         }
         Ok(Frame::Audio(AudioFrame {
             format: SampleFormat::S16,
-            channels: 1,
+            channels: self.channels,
             sample_rate: self.sample_rate,
-            samples: samples as u32,
+            samples: samples_per_channel as u32,
             pts: pkt.pts,
             time_base: self.time_base,
             data: vec![out],
@@ -157,10 +166,10 @@ impl Decoder for AlawDecoder {
 
 pub(crate) fn make_encoder(params: &CodecParameters) -> Result<Box<dyn Encoder>> {
     let channels = params.channels.unwrap_or(1);
-    if channels != 1 {
-        return Err(Error::unsupported(format!(
-            "G.711 A-law encoder: only mono is supported (got {channels} channels)"
-        )));
+    if channels == 0 {
+        return Err(Error::unsupported(
+            "G.711 A-law encoder: channel count must be >= 1",
+        ));
     }
     let sample_format = params.sample_format.unwrap_or(SampleFormat::S16);
     if sample_format != SampleFormat::S16 {
@@ -172,11 +181,12 @@ pub(crate) fn make_encoder(params: &CodecParameters) -> Result<Box<dyn Encoder>>
     let mut output = params.clone();
     output.media_type = MediaType::Audio;
     output.sample_format = Some(SampleFormat::S16);
-    output.channels = Some(1);
+    output.channels = Some(channels);
     output.sample_rate = Some(sample_rate);
     output.codec_id = params.codec_id.clone();
     Ok(Box::new(AlawEncoder {
         output,
+        channels,
         time_base: TimeBase::new(1, sample_rate as i64),
         queue: VecDeque::new(),
     }))
@@ -184,6 +194,7 @@ pub(crate) fn make_encoder(params: &CodecParameters) -> Result<Box<dyn Encoder>>
 
 pub struct AlawEncoder {
     output: CodecParameters,
+    channels: u16,
     time_base: TimeBase,
     queue: VecDeque<Packet>,
 }
@@ -201,8 +212,11 @@ impl Encoder for AlawEncoder {
         let Frame::Audio(a) = frame else {
             return Err(Error::invalid("G.711 A-law encoder: audio frames only"));
         };
-        if a.channels != 1 {
-            return Err(Error::invalid("G.711 A-law encoder: mono only"));
+        if a.channels != self.channels {
+            return Err(Error::invalid(format!(
+                "G.711 A-law encoder: channel mismatch (configured {}, frame {})",
+                self.channels, a.channels
+            )));
         }
         if a.format != SampleFormat::S16 {
             return Err(Error::invalid("G.711 A-law encoder: S16 input required"));

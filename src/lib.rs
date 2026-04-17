@@ -10,8 +10,9 @@
 //!
 //! Both variants are **byte-for-sample**: one encoded byte on input
 //! yields one S16 PCM sample on output, and vice versa. The spec defines
-//! G.711 at 8 kHz but the implementation works at any sample rate the
-//! caller provides — the companding math is independent of rate.
+//! G.711 at 8 kHz mono but the implementation is stateless per sample and
+//! therefore works at any sample rate and any interleaved channel count
+//! the caller provides.
 //!
 //! # Algorithm
 //!
@@ -57,8 +58,7 @@ pub fn register(reg: &mut CodecRegistry) {
     for alias in MULAW_ALIASES {
         let caps = CodecCapabilities::audio("g711_mulaw_sw")
             .with_lossy(true)
-            .with_intra_only(true)
-            .with_max_channels(1);
+            .with_intra_only(true);
         reg.register_both(
             CodecId::new(*alias),
             caps,
@@ -71,8 +71,7 @@ pub fn register(reg: &mut CodecRegistry) {
     for alias in ALAW_ALIASES {
         let caps = CodecCapabilities::audio("g711_alaw_sw")
             .with_lossy(true)
-            .with_intra_only(true)
-            .with_max_channels(1);
+            .with_intra_only(true);
         reg.register_both(
             CodecId::new(*alias),
             caps,
