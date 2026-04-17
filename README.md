@@ -1,18 +1,31 @@
 # oxideav-g711
 
-Pure-Rust ITU-T G.711 mu-law and A-law (PSTN) codec: decoder + encoder
+Pure-Rust **ITU-T G.711** codec — both μ-law and A-law variants, decoder
++ encoder.
 
-Part of the [oxideav](https://github.com/KarpelesLab/oxideav) framework — a
-100% pure Rust media transcoding and streaming stack. No C libraries, no FFI
-wrappers, no `*-sys` crates.
+Spec-exact lookup tables. Zero C dependencies, no FFI, no `*-sys` crates.
+
+Originally part of the [oxideav](https://github.com/KarpelesLab/oxideav)
+framework; extracted to its own crate for independent publication.
 
 ## Usage
 
 ```toml
 [dependencies]
-oxideav-g711 = "0.0.1"
+oxideav-g711 = "0.0.3"
 ```
+
+Plugs into [`oxideav-codec`](https://crates.io/crates/oxideav-codec):
+
+```rust
+let mut reg = oxideav_codec::CodecRegistry::new();
+oxideav_g711::register(&mut reg);
+```
+
+Decoder ids: `"pcm_mulaw"` and `"pcm_alaw"` (with common aliases) — input
+packets are 1 byte/sample at 8 kHz mono, output is 16-bit linear PCM.
+Encoder inverts the mapping.
 
 ## License
 
-MIT — see [LICENSE](https://github.com/KarpelesLab/oxideav/blob/master/LICENSE).
+MIT — see [LICENSE](LICENSE).

@@ -1,18 +1,17 @@
 [package]
 name = "oxideav-g711"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-repository.workspace = true
-authors.workspace = true
-description = "Pure-Rust ITU-T G.711 mu-law and A-law (PSTN) codec: decoder + encoder"
-
+version = "0.0.3"
+edition = "2021"
+rust-version = "1.80"
+license = "MIT"
+authors = ["Mark Karpeles"]
+description = "Pure-Rust ITU-T G.711 μ-law and A-law (PSTN) codec — decoder + encoder"
+repository = "https://github.com/OxideAV/oxideav-g711"
+homepage = "https://github.com/OxideAV/oxideav-g711"
 readme = "README.md"
-homepage.workspace = true
 keywords = ["multimedia", "audio", "g711", "telephony", "codec"]
 categories = ["multimedia::encoding", "multimedia::audio"]
 
 [dependencies]
-oxideav-core = { workspace = true }
-oxideav-codec = { workspace = true }
+oxideav-core = "0.0.3"
+oxideav-codec = "0.0.3"
