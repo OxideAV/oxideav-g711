@@ -37,7 +37,7 @@ pub mod mulaw;
 pub mod tables;
 
 use oxideav_codec::CodecRegistry;
-use oxideav_core::{CodecCapabilities, CodecId};
+use oxideav_core::{CodecCapabilities, CodecId, CodecTag};
 
 /// Canonical codec id for µ-law (matches FFmpeg's `pcm_mulaw`).
 pub const CODEC_ID_MULAW: &str = "pcm_mulaw";
@@ -79,6 +79,21 @@ pub fn register(reg: &mut CodecRegistry) {
             alaw::make_encoder,
         );
     }
+
+    // AVI / WAVEFORMATEX tags — `WAVE_FORMAT_ALAW` = 0x0006,
+    // `WAVE_FORMAT_MULAW` = 0x0007. Map to the canonical codec ids.
+    reg.claim_tag(
+        CodecId::new(CODEC_ID_ALAW),
+        CodecTag::wave_format(0x0006),
+        10,
+        None,
+    );
+    reg.claim_tag(
+        CodecId::new(CODEC_ID_MULAW),
+        CodecTag::wave_format(0x0007),
+        10,
+        None,
+    );
 }
 
 #[cfg(test)]
