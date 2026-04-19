@@ -190,7 +190,10 @@ fn alaw_encode_decode_encode_is_idempotent() {
         let b1 = alaw::encode_sample(x);
         let s1 = alaw::decode_sample(b1);
         let b2 = alaw::encode_sample(s1);
-        assert_eq!(b1, b2, "A-law not idempotent at sample {x} (b1={b1:#04x}, s1={s1}, b2={b2:#04x})");
+        assert_eq!(
+            b1, b2,
+            "A-law not idempotent at sample {x} (b1={b1:#04x}, s1={s1}, b2={b2:#04x})"
+        );
     }
 }
 
@@ -217,6 +220,9 @@ fn alaw_decode_encode_is_identity_for_every_byte() {
     for b in 0u8..=255 {
         let s = alaw::decode_sample(b);
         let b2 = alaw::encode_sample(s);
-        assert_eq!(b, b2, "A-law decode/encode not identity at byte {b:#04x}: got {b2:#04x}");
+        assert_eq!(
+            b, b2,
+            "A-law decode/encode not identity at byte {b:#04x}: got {b2:#04x}"
+        );
     }
 }

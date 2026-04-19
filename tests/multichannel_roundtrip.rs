@@ -4,9 +4,7 @@
 //! laws and a range of channel counts.
 
 use oxideav_codec::CodecRegistry;
-use oxideav_core::{
-    AudioFrame, CodecId, CodecParameters, Frame, Packet, SampleFormat, TimeBase,
-};
+use oxideav_core::{AudioFrame, CodecId, CodecParameters, Frame, Packet, SampleFormat, TimeBase};
 
 fn params(codec: &str, channels: u16, sample_rate: u32) -> CodecParameters {
     let mut p = CodecParameters::audio(CodecId::new(codec));
@@ -66,7 +64,10 @@ fn roundtrip(codec: &str, channels: u16) {
     assert_eq!(af.channels, channels);
     assert_eq!(af.samples as usize, samples_per_channel);
     assert_eq!(af.data.len(), 1);
-    assert_eq!(af.data[0].len(), samples_per_channel * channels as usize * 2);
+    assert_eq!(
+        af.data[0].len(),
+        samples_per_channel * channels as usize * 2
+    );
 
     // Every decoded sample must be the deterministic quantisation of
     // the corresponding input sample: `decode(encode(x))`. Channels
@@ -78,7 +79,9 @@ fn roundtrip(codec: &str, channels: u16) {
     assert_eq!(decoded.len(), input.len());
     for (i, (&x, &y)) in input.iter().zip(decoded.iter()).enumerate() {
         let re_quant = match codec {
-            "pcm_mulaw" => oxideav_g711::mulaw::decode_sample(oxideav_g711::mulaw::encode_sample(x)),
+            "pcm_mulaw" => {
+                oxideav_g711::mulaw::decode_sample(oxideav_g711::mulaw::encode_sample(x))
+            }
             "pcm_alaw" => oxideav_g711::alaw::decode_sample(oxideav_g711::alaw::encode_sample(x)),
             _ => unreachable!(),
         };

@@ -36,7 +36,7 @@ pub mod alaw;
 pub mod mulaw;
 pub mod tables;
 
-use oxideav_codec::CodecRegistry;
+use oxideav_codec::{CodecInfo, CodecRegistry};
 use oxideav_core::{CodecCapabilities, CodecId, CodecTag};
 
 /// Canonical codec id for µ-law (matches FFmpeg's `pcm_mulaw`).
@@ -54,46 +54,37 @@ pub const ALAW_ALIASES: &[&str] = &["pcm_alaw", "alaw", "g711a"];
 /// Register every G.711 codec id + alias for both decode and encode.
 pub fn register(reg: &mut CodecRegistry) {
     // µ-law: one registration per alias so calls with any of them resolve
-    // cleanly.
-    for alias in MULAW_ALIASES {
+    // cleanly. The canonical alias carries the WAVEFORMATEX tag claim.
+    for (idx, alias) in MULAW_ALIASES.iter().enumerate() {
         let caps = CodecCapabilities::audio("g711_mulaw_sw")
             .with_lossy(true)
             .with_intra_only(true);
-        reg.register_both(
-            CodecId::new(*alias),
-            caps,
-            mulaw::make_decoder,
-            mulaw::make_encoder,
-        );
+        let mut info = CodecInfo::new(CodecId::new(*alias))
+            .capabilities(caps)
+            .decoder(mulaw::make_decoder)
+            .encoder(mulaw::make_encoder);
+        if idx == 0 {
+            // WAVE_FORMAT_MULAW = 0x0007 — attach to the canonical alias.
+            info = info.tag(CodecTag::wave_format(0x0007));
+        }
+        reg.register(info);
     }
 
     // A-law: same story.
-    for alias in ALAW_ALIASES {
+    for (idx, alias) in ALAW_ALIASES.iter().enumerate() {
         let caps = CodecCapabilities::audio("g711_alaw_sw")
             .with_lossy(true)
             .with_intra_only(true);
-        reg.register_both(
-            CodecId::new(*alias),
-            caps,
-            alaw::make_decoder,
-            alaw::make_encoder,
-        );
+        let mut info = CodecInfo::new(CodecId::new(*alias))
+            .capabilities(caps)
+            .decoder(alaw::make_decoder)
+            .encoder(alaw::make_encoder);
+        if idx == 0 {
+            // WAVE_FORMAT_ALAW = 0x0006 — attach to the canonical alias.
+            info = info.tag(CodecTag::wave_format(0x0006));
+        }
+        reg.register(info);
     }
-
-    // AVI / WAVEFORMATEX tags — `WAVE_FORMAT_ALAW` = 0x0006,
-    // `WAVE_FORMAT_MULAW` = 0x0007. Map to the canonical codec ids.
-    reg.claim_tag(
-        CodecId::new(CODEC_ID_ALAW),
-        CodecTag::wave_format(0x0006),
-        10,
-        None,
-    );
-    reg.claim_tag(
-        CodecId::new(CODEC_ID_MULAW),
-        CodecTag::wave_format(0x0007),
-        10,
-        None,
-    );
 }
 
 #[cfg(test)]
