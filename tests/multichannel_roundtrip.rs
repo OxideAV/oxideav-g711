@@ -3,7 +3,7 @@
 //! trait surface through the registry to prove it end-to-end for both
 //! laws and a range of channel counts.
 
-use oxideav_codec::CodecRegistry;
+use oxideav_core::CodecRegistry;
 use oxideav_core::{AudioFrame, CodecId, CodecParameters, Frame, Packet, SampleFormat, TimeBase};
 
 fn params(codec: &str, channels: u16, sample_rate: u32) -> CodecParameters {

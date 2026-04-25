@@ -2,11 +2,11 @@
 //! [`UlawDecoder`] / [`UlawEncoder`] implementing the `oxideav_codec`
 //! traits. Each encoded byte carries exactly one S16 PCM sample.
 
-use oxideav_codec::{Decoder, Encoder};
 use oxideav_core::{
     AudioFrame, CodecId, CodecParameters, Error, Frame, MediaType, Packet, Result, SampleFormat,
     TimeBase,
 };
+use oxideav_core::{Decoder, Encoder};
 use std::collections::VecDeque;
 
 use crate::tables::{MULAW_BIAS, MULAW_DECODE};

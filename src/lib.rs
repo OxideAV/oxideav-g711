@@ -36,8 +36,8 @@ pub mod alaw;
 pub mod mulaw;
 pub mod tables;
 
-use oxideav_codec::{CodecInfo, CodecRegistry};
 use oxideav_core::{CodecCapabilities, CodecId, CodecTag};
+use oxideav_core::{CodecInfo, CodecRegistry};
 
 /// Canonical codec id for µ-law (matches FFmpeg's `pcm_mulaw`).
 pub const CODEC_ID_MULAW: &str = "pcm_mulaw";
