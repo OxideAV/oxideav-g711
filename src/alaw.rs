@@ -78,12 +78,9 @@ pub(crate) fn make_decoder(params: &CodecParameters) -> Result<Box<dyn Decoder>>
             "G.711 A-law decoder: channel count must be >= 1",
         ));
     }
-    let sample_rate = params.sample_rate.unwrap_or(8_000);
     Ok(Box::new(AlawDecoder {
         codec_id: params.codec_id.clone(),
         channels,
-        sample_rate,
-        time_base: TimeBase::new(1, sample_rate as i64),
         pending: None,
         eof: false,
     }))
@@ -92,8 +89,6 @@ pub(crate) fn make_decoder(params: &CodecParameters) -> Result<Box<dyn Decoder>>
 pub struct AlawDecoder {
     codec_id: CodecId,
     channels: u16,
-    sample_rate: u32,
-    time_base: TimeBase,
     pending: Option<Packet>,
     eof: bool,
 }
@@ -123,12 +118,8 @@ impl Decoder for AlawDecoder {
         };
         if pkt.data.is_empty() {
             return Ok(Frame::Audio(AudioFrame {
-                format: SampleFormat::S16,
-                channels: self.channels,
-                sample_rate: self.sample_rate,
                 samples: 0,
                 pts: pkt.pts,
-                time_base: self.time_base,
                 data: vec![Vec::new()],
             }));
         }
@@ -146,12 +137,8 @@ impl Decoder for AlawDecoder {
             out.extend_from_slice(&s.to_le_bytes());
         }
         Ok(Frame::Audio(AudioFrame {
-            format: SampleFormat::S16,
-            channels: self.channels,
-            sample_rate: self.sample_rate,
             samples: samples_per_channel as u32,
             pts: pkt.pts,
-            time_base: self.time_base,
             data: vec![out],
         }))
     }
@@ -186,7 +173,6 @@ pub(crate) fn make_encoder(params: &CodecParameters) -> Result<Box<dyn Encoder>>
     output.codec_id = params.codec_id.clone();
     Ok(Box::new(AlawEncoder {
         output,
-        channels,
         time_base: TimeBase::new(1, sample_rate as i64),
         queue: VecDeque::new(),
     }))
@@ -194,7 +180,6 @@ pub(crate) fn make_encoder(params: &CodecParameters) -> Result<Box<dyn Encoder>>
 
 pub struct AlawEncoder {
     output: CodecParameters,
-    channels: u16,
     time_base: TimeBase,
     queue: VecDeque<Packet>,
 }
@@ -212,15 +197,9 @@ impl Encoder for AlawEncoder {
         let Frame::Audio(a) = frame else {
             return Err(Error::invalid("G.711 A-law encoder: audio frames only"));
         };
-        if a.channels != self.channels {
-            return Err(Error::invalid(format!(
-                "G.711 A-law encoder: channel mismatch (configured {}, frame {})",
-                self.channels, a.channels
-            )));
-        }
-        if a.format != SampleFormat::S16 {
-            return Err(Error::invalid("G.711 A-law encoder: S16 input required"));
-        }
+        // Stream-level format/channels/sample_rate are now contractual via
+        // CodecParameters and validated at construction; per-frame checks
+        // disappear with the slim AudioFrame shape.
         let bytes = a
             .data
             .first()
@@ -233,12 +212,7 @@ impl Encoder for AlawEncoder {
             let s = i16::from_le_bytes([chunk[0], chunk[1]]);
             out.push(encode_sample(s));
         }
-        let tb = if a.time_base.0.num == 0 {
-            self.time_base
-        } else {
-            a.time_base
-        };
-        let mut pkt = Packet::new(0, tb, out);
+        let mut pkt = Packet::new(0, self.time_base, out);
         pkt.pts = a.pts;
         pkt.dts = a.pts;
         pkt.duration = Some(a.samples as i64);

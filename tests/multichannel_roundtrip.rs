@@ -14,7 +14,7 @@ fn params(codec: &str, channels: u16, sample_rate: u32) -> CodecParameters {
     p
 }
 
-fn make_frame(samples_per_channel: usize, channels: u16, sample_rate: u32) -> (Frame, Vec<i16>) {
+fn make_frame(samples_per_channel: usize, channels: u16, _sample_rate: u32) -> (Frame, Vec<i16>) {
     // Deterministic signal: linear ramp per channel with a channel-dependent
     // offset so every interleaved slot is distinct.
     let total = samples_per_channel * channels as usize;
@@ -30,12 +30,8 @@ fn make_frame(samples_per_channel: usize, channels: u16, sample_rate: u32) -> (F
         bytes.extend_from_slice(&s.to_le_bytes());
     }
     let frame = Frame::Audio(AudioFrame {
-        format: SampleFormat::S16,
-        channels,
-        sample_rate,
         samples: samples_per_channel as u32,
         pts: Some(0),
-        time_base: TimeBase::new(1, sample_rate as i64),
         data: vec![bytes],
     });
     (frame, interleaved)
@@ -61,7 +57,6 @@ fn roundtrip(codec: &str, channels: u16) {
     let Frame::Audio(af) = dec.receive_frame().unwrap() else {
         panic!("expected audio frame");
     };
-    assert_eq!(af.channels, channels);
     assert_eq!(af.samples as usize, samples_per_channel);
     assert_eq!(af.data.len(), 1);
     assert_eq!(
@@ -148,9 +143,8 @@ fn mulaw_custom_sample_rate_roundtrip() {
     let Frame::Audio(af) = dec.receive_frame().unwrap() else {
         unreachable!()
     };
-    assert_eq!(af.sample_rate, 16_000);
-    assert_eq!(af.channels, 2);
     assert_eq!(af.samples, 320);
+    assert_eq!(af.data[0].len(), 320 * 2 * 2);
 }
 
 #[test]

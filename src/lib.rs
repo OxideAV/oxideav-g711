@@ -148,12 +148,8 @@ mod tests {
             pcm_bytes.extend_from_slice(&s.to_le_bytes());
         }
         let input = Frame::Audio(oxideav_core::AudioFrame {
-            format: SampleFormat::S16,
-            channels: 1,
-            sample_rate: 8_000,
             samples: samples.len() as u32,
             pts: Some(0),
-            time_base: TimeBase::new(1, 8_000),
             data: vec![pcm_bytes],
         });
         enc.send_frame(&input).unwrap();
