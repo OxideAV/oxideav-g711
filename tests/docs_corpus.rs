@@ -40,8 +40,10 @@
 use std::fs;
 use std::path::PathBuf;
 
-use oxideav_core::{CodecId, CodecParameters, Decoder, Frame, Packet, SampleFormat, TimeBase};
-use oxideav_g711::{alaw, mulaw};
+use oxideav_core::{
+    CodecId, CodecParameters, CodecRegistry, Decoder, Frame, Packet, SampleFormat, TimeBase,
+};
+use oxideav_g711::register;
 
 // ---------------------------------------------------------------------------
 // Fixture path resolution
@@ -83,7 +85,18 @@ struct PcmS16 {
 /// `data`. Supports WAVEFORMAT / WAVEFORMATEX / WAVEFORMATEXTENSIBLE
 /// to the extent G.711 / S16 PCM fixtures need (we only consume the
 /// first 16 bytes of `fmt `; trailing extension bytes are skipped).
-fn parse_wav(bytes: &[u8]) -> Result<(u16 /*format_tag*/, u16 /*channels*/, u32 /*sample_rate*/, u16 /*bits_per_sample*/, Vec<u8> /*data*/), String> {
+fn parse_wav(
+    bytes: &[u8],
+) -> Result<
+    (
+        u16,     /*format_tag*/
+        u16,     /*channels*/
+        u32,     /*sample_rate*/
+        u16,     /*bits_per_sample*/
+        Vec<u8>, /*data*/
+    ),
+    String,
+> {
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
         return Err("not a RIFF/WAVE file".to_string());
     }
@@ -92,9 +105,12 @@ fn parse_wav(bytes: &[u8]) -> Result<(u16 /*format_tag*/, u16 /*channels*/, u32 
     let mut data: Option<Vec<u8>> = None;
     while off + 8 <= bytes.len() {
         let id = &bytes[off..off + 4];
-        let size =
-            u32::from_le_bytes([bytes[off + 4], bytes[off + 5], bytes[off + 6], bytes[off + 7]])
-                as usize;
+        let size = u32::from_le_bytes([
+            bytes[off + 4],
+            bytes[off + 5],
+            bytes[off + 6],
+            bytes[off + 7],
+        ]) as usize;
         let body_off = off + 8;
         if body_off + size > bytes.len() {
             return Err(format!(
@@ -113,8 +129,7 @@ fn parse_wav(bytes: &[u8]) -> Result<(u16 /*format_tag*/, u16 /*channels*/, u32 
                 let body = &bytes[body_off..body_off + size];
                 let format_tag = u16::from_le_bytes([body[0], body[1]]);
                 let channels = u16::from_le_bytes([body[2], body[3]]);
-                let sample_rate =
-                    u32::from_le_bytes([body[4], body[5], body[6], body[7]]);
+                let sample_rate = u32::from_le_bytes([body[4], body[5], body[6], body[7]]);
                 let bits_per_sample = u16::from_le_bytes([body[14], body[15]]);
                 fmt = Some((format_tag, channels, sample_rate, bits_per_sample));
             }
@@ -135,7 +150,17 @@ fn parse_wav(bytes: &[u8]) -> Result<(u16 /*format_tag*/, u16 /*channels*/, u32 
 /// Encoding 1 = 8-bit µ-law, 27 = 8-bit A-law (per the historical
 /// SUN_AUDIOFILE_ENCODING_* table). header_size points at the start
 /// of the audio payload.
-fn parse_au(bytes: &[u8]) -> Result<(&'static str /*alias*/, u16 /*ch*/, u32 /*sr*/, Vec<u8>), String> {
+fn parse_au(
+    bytes: &[u8],
+) -> Result<
+    (
+        &'static str, /*alias*/
+        u16,          /*ch*/
+        u32,          /*sr*/
+        Vec<u8>,
+    ),
+    String,
+> {
     if bytes.len() < 24 || &bytes[0..4] != b".snd" {
         return Err("not a Sun .au file (.snd magic missing)".to_string());
     }
@@ -181,9 +206,7 @@ fn load_input(dir: &PathBuf, raw_meta: Option<(&'static str, u16, u32)>) -> Opti
             }
         };
         if bps != 8 {
-            eprintln!(
-                "  load_input: input.wav bits_per_sample={bps}, expected 8 for G.711"
-            );
+            eprintln!("  load_input: input.wav bits_per_sample={bps}, expected 8 for G.711");
             return None;
         }
         let alias: &'static str = match tag {
@@ -254,9 +277,7 @@ fn load_expected_pcm(path: &PathBuf) -> Option<PcmS16> {
         return None;
     }
     if bps != 16 {
-        eprintln!(
-            "  load_expected_pcm: expected.wav bits_per_sample={bps}, expected 16"
-        );
+        eprintln!("  load_expected_pcm: expected.wav bits_per_sample={bps}, expected 16");
         return None;
     }
     Some(PcmS16 {
@@ -328,12 +349,16 @@ fn decode_stream(stream: &G711Stream) -> Result<Vec<u8>, String> {
     params.sample_rate = Some(stream.sample_rate);
     params.channels = Some(stream.channels);
     params.sample_format = Some(SampleFormat::S16);
-    let mut dec: Box<dyn Decoder> = match stream.codec_alias {
-        "pcm_alaw" => alaw::make_decoder(&params).map_err(|e| format!("alaw ctor: {e:?}"))?,
-        "pcm_mulaw" => mulaw::make_decoder(&params).map_err(|e| format!("mulaw ctor: {e:?}"))?,
-        other => return Err(format!("unknown alias {other}")),
-    };
-    let pkt = Packet::new(0, TimeBase::new(1, stream.sample_rate as i64), stream.payload.clone());
+    let mut reg = CodecRegistry::new();
+    register(&mut reg);
+    let mut dec: Box<dyn Decoder> = reg
+        .make_decoder(&params)
+        .map_err(|e| format!("{} ctor: {e:?}", stream.codec_alias))?;
+    let pkt = Packet::new(
+        0,
+        TimeBase::new(1, stream.sample_rate as i64),
+        stream.payload.clone(),
+    );
     dec.send_packet(&pkt)
         .map_err(|e| format!("send_packet: {e:?}"))?;
     let frame = dec
@@ -467,13 +492,7 @@ fn evaluate(case: &CorpusCase) {
     let length_match = our_s16.len() == expected.bytes.len();
     eprintln!(
         "[{:?}] {}: {}/{} samples exact ({:.4}%), max |diff|={}, length-match={}",
-        case.tier,
-        case.name,
-        total_exact,
-        total_n,
-        overall_pct,
-        overall_max_abs,
-        length_match
+        case.tier, case.name, total_exact, total_n, overall_pct, overall_max_abs, length_match
     );
 
     match case.tier {
