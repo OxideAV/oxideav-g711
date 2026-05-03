@@ -38,7 +38,7 @@
 //! and returns success, so the CI gate stays clean for both layouts.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use oxideav_core::{
     CodecId, CodecParameters, CodecRegistry, Decoder, Frame, Packet, SampleFormat, TimeBase,
@@ -187,15 +187,12 @@ fn parse_au(
 /// Parse a fixture `input.*` into a G711Stream. The on-disk container
 /// (.wav / .au / .raw) is auto-detected; raw inputs need explicit
 /// metadata which the caller must supply.
-fn load_input(dir: &PathBuf, raw_meta: Option<(&'static str, u16, u32)>) -> Option<G711Stream> {
+fn load_input(dir: &Path, raw_meta: Option<(&'static str, u16, u32)>) -> Option<G711Stream> {
     // Search order: wav > au > raw. Notes.md fixtures reference these
     // by name so we accept whichever is present.
     let try_path = |name: &str| -> Option<Vec<u8>> {
         let p = dir.join(name);
-        match fs::read(&p) {
-            Ok(b) => Some(b),
-            Err(_) => None,
-        }
+        fs::read(&p).ok()
     };
     if let Some(bytes) = try_path("input.wav") {
         let (tag, ch, sr, bps, data) = match parse_wav(&bytes) {
@@ -258,11 +255,8 @@ fn load_input(dir: &PathBuf, raw_meta: Option<(&'static str, u16, u32)>) -> Opti
 
 /// Read a reference PCM fixture (S16LE, interleaved). The corpus
 /// stores these as RIFF WAVE files; we re-use parse_wav.
-fn load_expected_pcm(path: &PathBuf) -> Option<PcmS16> {
-    let bytes = match fs::read(path) {
-        Ok(b) => b,
-        Err(_) => return None,
-    };
+fn load_expected_pcm(path: &Path) -> Option<PcmS16> {
+    let bytes = fs::read(path).ok()?;
     let (tag, ch, sr, bps, data) = match parse_wav(&bytes) {
         Ok(v) => v,
         Err(e) => {
@@ -381,13 +375,12 @@ fn compare_per_channel(our_s16: &[u8], ref_s16: &[u8], channels: u16) -> Vec<Per
     }
     let n = our_s16.len().min(ref_s16.len()) / pair_size;
     for i in 0..n {
-        for c in 0..channels as usize {
+        for (c, entry) in out.iter_mut().enumerate().take(channels as usize) {
             let off = i * pair_size + c * 2;
             let our_v = i16::from_le_bytes([our_s16[off], our_s16[off + 1]]) as i32;
             let ref_v = i16::from_le_bytes([ref_s16[off], ref_s16[off + 1]]) as i32;
             let diff = our_v - ref_v;
             let abs = diff.abs();
-            let entry = &mut out[c];
             entry.n += 1;
             if abs == 0 {
                 entry.exact += 1;
