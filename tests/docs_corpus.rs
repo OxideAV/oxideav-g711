@@ -43,7 +43,7 @@ use std::path::{Path, PathBuf};
 use oxideav_core::{
     CodecId, CodecParameters, CodecRegistry, Decoder, Frame, Packet, SampleFormat, TimeBase,
 };
-use oxideav_g711::register;
+use oxideav_g711::register_codecs;
 
 // ---------------------------------------------------------------------------
 // Fixture path resolution
@@ -344,7 +344,7 @@ fn decode_stream(stream: &G711Stream) -> Result<Vec<u8>, String> {
     params.channels = Some(stream.channels);
     params.sample_format = Some(SampleFormat::S16);
     let mut reg = CodecRegistry::new();
-    register(&mut reg);
+    register_codecs(&mut reg);
     let mut dec: Box<dyn Decoder> = reg
         .make_decoder(&params)
         .map_err(|e| format!("{} ctor: {e:?}", stream.codec_alias))?;

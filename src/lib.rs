@@ -52,7 +52,7 @@ pub const MULAW_ALIASES: &[&str] = &["pcm_mulaw", "ulaw", "g711u"];
 pub const ALAW_ALIASES: &[&str] = &["pcm_alaw", "alaw", "g711a"];
 
 /// Register every G.711 codec id + alias for both decode and encode.
-pub fn register(reg: &mut CodecRegistry) {
+pub fn register_codecs(reg: &mut CodecRegistry) {
     // µ-law: one registration per alias so calls with any of them resolve
     // cleanly. The canonical alias carries the WAVEFORMATEX tag claim.
     for (idx, alias) in MULAW_ALIASES.iter().enumerate() {
@@ -87,6 +87,13 @@ pub fn register(reg: &mut CodecRegistry) {
     }
 }
 
+/// Unified registration entry point — installs G.711 µ-law and A-law
+/// (with their canonical aliases) into the codec sub-registry of the
+/// supplied [`oxideav_core::RuntimeContext`].
+pub fn register(ctx: &mut oxideav_core::RuntimeContext) {
+    register_codecs(&mut ctx.codecs);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,7 +110,7 @@ mod tests {
     #[test]
     fn register_all_aliases() {
         let mut reg = CodecRegistry::new();
-        register(&mut reg);
+        register_codecs(&mut reg);
         for alias in MULAW_ALIASES.iter().chain(ALAW_ALIASES.iter()) {
             let id = CodecId::new(*alias);
             assert!(reg.has_decoder(&id), "no decoder for alias {alias}");
@@ -114,7 +121,7 @@ mod tests {
     #[test]
     fn mulaw_aliases_resolve_to_same_impl() {
         let mut reg = CodecRegistry::new();
-        register(&mut reg);
+        register_codecs(&mut reg);
         // Build a decoder for every alias and feed it the same byte. All
         // must produce the same S16 result.
         let input = vec![0x55u8, 0xAA, 0x80, 0x00];
@@ -137,7 +144,7 @@ mod tests {
     #[test]
     fn mulaw_roundtrip_samples() {
         let mut reg = CodecRegistry::new();
-        register(&mut reg);
+        register_codecs(&mut reg);
         let p = params(CODEC_ID_MULAW);
         let mut enc = reg.make_encoder(&p).expect("make_encoder");
         let mut dec = reg.make_decoder(&p).expect("make_decoder");
@@ -160,5 +167,22 @@ mod tests {
             panic!("expected audio frame");
         };
         assert_eq!(af.samples as usize, samples.len());
+    }
+
+    #[test]
+    fn register_via_runtime_context_installs_codec_factory() {
+        let mut ctx = oxideav_core::RuntimeContext::new();
+        register(&mut ctx);
+        for alias in MULAW_ALIASES.iter().chain(ALAW_ALIASES.iter()) {
+            let id = CodecId::new(*alias);
+            assert!(
+                ctx.codecs.has_decoder(&id),
+                "decoder factory not installed via RuntimeContext for {alias}"
+            );
+            assert!(
+                ctx.codecs.has_encoder(&id),
+                "encoder factory not installed via RuntimeContext for {alias}"
+            );
+        }
     }
 }

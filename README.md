@@ -26,17 +26,16 @@ channel-independent — interleaved S16 input with any channel count
 round-trips through the same byte-per-sample mapping.
 
 ```rust
-use oxideav_codec::CodecRegistry;
-use oxideav_core::{CodecId, CodecParameters, Frame, Packet, TimeBase};
+use oxideav_core::{CodecId, CodecParameters, Frame, Packet, RuntimeContext, TimeBase};
 
-let mut reg = CodecRegistry::new();
-oxideav_g711::register(&mut reg);
+let mut ctx = RuntimeContext::new();
+oxideav_g711::register(&mut ctx);
 
 let mut params = CodecParameters::audio(CodecId::new("pcm_mulaw"));
 params.sample_rate = Some(8_000);
 params.channels = Some(1);
 
-let mut dec = reg.make_decoder(&params)?;
+let mut dec = ctx.codecs.make_decoder(&params)?;
 dec.send_packet(&Packet::new(0, TimeBase::new(1, 8_000), mulaw_bytes))?;
 let Frame::Audio(a) = dec.receive_frame()? else { unreachable!() };
 // `a.data[0]` is interleaved S16 PCM.
