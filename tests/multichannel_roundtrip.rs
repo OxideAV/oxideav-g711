@@ -42,8 +42,8 @@ fn roundtrip(codec: &str, channels: u16) {
     oxideav_g711::register_codecs(&mut reg);
     let p = params(codec, channels, 8_000);
 
-    let mut enc = reg.make_encoder(&p).expect("make_encoder");
-    let mut dec = reg.make_decoder(&p).expect("make_decoder");
+    let mut enc = reg.first_encoder(&p).expect("make_encoder");
+    let mut dec = reg.first_decoder(&p).expect("make_decoder");
 
     let samples_per_channel = 160; // 20 ms @ 8 kHz
     let (frame, input) = make_frame(samples_per_channel, channels, 8_000);
@@ -133,8 +133,8 @@ fn mulaw_custom_sample_rate_roundtrip() {
     let mut reg = CodecRegistry::new();
     oxideav_g711::register_codecs(&mut reg);
     let p = params("pcm_mulaw", 2, 16_000);
-    let mut enc = reg.make_encoder(&p).unwrap();
-    let mut dec = reg.make_decoder(&p).unwrap();
+    let mut enc = reg.first_encoder(&p).unwrap();
+    let mut dec = reg.first_decoder(&p).unwrap();
 
     let (frame, _) = make_frame(320, 2, 16_000);
     enc.send_frame(&frame).unwrap();
@@ -152,7 +152,7 @@ fn decoder_rejects_partial_channel_packet() {
     let mut reg = CodecRegistry::new();
     oxideav_g711::register_codecs(&mut reg);
     let p = params("pcm_mulaw", 2, 8_000);
-    let mut dec = reg.make_decoder(&p).unwrap();
+    let mut dec = reg.first_decoder(&p).unwrap();
     // 5 bytes with 2 channels → not divisible, must error.
     let pkt = Packet::new(0, TimeBase::new(1, 8_000), vec![0xFFu8; 5]);
     dec.send_packet(&pkt).unwrap();

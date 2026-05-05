@@ -346,7 +346,7 @@ fn decode_stream(stream: &G711Stream) -> Result<Vec<u8>, String> {
     let mut reg = CodecRegistry::new();
     register_codecs(&mut reg);
     let mut dec: Box<dyn Decoder> = reg
-        .make_decoder(&params)
+        .first_decoder(&params)
         .map_err(|e| format!("{} ctor: {e:?}", stream.codec_alias))?;
     let pkt = Packet::new(
         0,

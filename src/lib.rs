@@ -130,7 +130,7 @@ mod tests {
         let mut results = Vec::new();
         for alias in MULAW_ALIASES {
             let p = params(alias);
-            let mut dec = reg.make_decoder(&p).expect("make_decoder");
+            let mut dec = reg.first_decoder(&p).expect("make_decoder");
             let pkt = Packet::new(0, TimeBase::new(1, 8_000), input.clone());
             dec.send_packet(&pkt).unwrap();
             let Frame::Audio(af) = dec.receive_frame().unwrap() else {
@@ -148,8 +148,8 @@ mod tests {
         let mut reg = CodecRegistry::new();
         register_codecs(&mut reg);
         let p = params(CODEC_ID_MULAW);
-        let mut enc = reg.make_encoder(&p).expect("make_encoder");
-        let mut dec = reg.make_decoder(&p).expect("make_decoder");
+        let mut enc = reg.first_encoder(&p).expect("make_encoder");
+        let mut dec = reg.first_decoder(&p).expect("make_decoder");
 
         let samples: Vec<i16> = vec![0, 1, -1, 100, -100, 10000, -10000, 32000, -32000];
         let mut pcm_bytes = Vec::with_capacity(samples.len() * 2);
