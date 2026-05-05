@@ -94,6 +94,8 @@ pub fn register(ctx: &mut oxideav_core::RuntimeContext) {
     register_codecs(&mut ctx.codecs);
 }
 
+oxideav_core::register!("g711", register);
+
 #[cfg(test)]
 mod tests {
     use super::*;
