@@ -39,10 +39,14 @@ pub mod tables;
 use oxideav_core::{CodecCapabilities, CodecId, CodecTag};
 use oxideav_core::{CodecInfo, CodecRegistry};
 
-/// Canonical codec id for µ-law (matches FFmpeg's `pcm_mulaw`).
+/// Canonical codec id for µ-law: `"pcm_mulaw"`. This is the
+/// conventional string token used across multimedia tooling for
+/// G.711 µ-law (see also the aliases below), chosen so codec-id
+/// resolution interoperates with strings users already type.
 pub const CODEC_ID_MULAW: &str = "pcm_mulaw";
 
-/// Canonical codec id for A-law (matches FFmpeg's `pcm_alaw`).
+/// Canonical codec id for A-law: `"pcm_alaw"`. Same convention as
+/// [`CODEC_ID_MULAW`] above.
 pub const CODEC_ID_ALAW: &str = "pcm_alaw";
 
 /// Aliases that resolve to the µ-law implementation.
