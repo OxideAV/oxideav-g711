@@ -91,6 +91,16 @@ construction without the registry lookup.
   the whole S16 range.
 - Multichannel round-trip (1, 2, 6, 8 channels) through the trait
   surface returns the same per-sample quantisation as direct calls.
+- **Per-sample quantization bound**: every S16 input round-trips
+  within the spec-derived per-segment step bound (full sweep gated on
+  `cfg(not(debug_assertions))` so `cargo test --release` exercises all
+  65 536 samples; sparse stride runs in debug). Worst-case observed
+  error for both laws lives in the saturation band above ±32256
+  (A-law) / ±32635 (µ-law), as predicted by the spec.
+- **PSNR floor**: 1-second sinusoids at 400 Hz / 1 kHz / 2 kHz at
+  -3 dBFS round-trip with PSNR ≥ 35 dB (measured: µ-law ~41–47 dB,
+  A-law ~39–49 dB). Comfortably above the ~38 dB SQNR design point
+  the G.711 staged Recommendation cites for voice-band tones.
 
 ## License
 

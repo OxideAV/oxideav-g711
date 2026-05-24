@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Other
+
+- add exhaustive S16-domain property sweep gated on
+  `cfg(not(debug_assertions))` — every encode→decode round-trip is
+  checked against the per-segment quantization-step bound derived from
+  ITU-T G.711 §2 (A-law) and §3 (µ-law). Sparse stride (`step_by(13)`)
+  runs in debug for fast feedback; the exhaustive 65 536-sample sweep
+  runs under `cargo test --release`. Empirical worst-case error:
+  µ-law 644 LSB (at i16::MIN, in the spec-permitted saturation band),
+  A-law 512 LSB (same band).
+- add PSNR floor regressions: 1-second sines at 400 Hz / 1 kHz / 2 kHz
+  at -3 dBFS, encoded+decoded, assert PSNR ≥ 35 dB (well above the
+  ~38 dB SQNR design point the G.711 staged Recommendation cites for
+  voice-band tones). Measured: µ-law 46.69 / 40.96 / 44.10 dB; A-law
+  49.06 / 39.25 / 49.39 dB at 400 Hz / 1 kHz / 2 kHz respectively.
+  Includes a cross-law within-5-dB-at-1-kHz check.
+
 ## [0.0.6](https://github.com/OxideAV/oxideav-g711/compare/v0.0.5...v0.0.6) - 2026-05-06
 
 ### Other
