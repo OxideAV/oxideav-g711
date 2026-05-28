@@ -14,3 +14,33 @@ categories = ["multimedia::encoding", "multimedia::audio"]
 
 [dependencies]
 oxideav-core = "0.1"
+
+[dev-dependencies]
+# Round 173 (depth-mode benchmarks): Criterion drives three bench
+# harnesses (`decode`, `encode`, `roundtrip`) so future optimisation
+# rounds can A/B-test their tweaks to the per-sample µ-law / A-law
+# hot paths (LUT decode, arithmetic encode segment search) against a
+# stable, fixture-free baseline. Pinned to the same 0.5 line the
+# other OxideAV crates with benches (flac, tta, magicyuv, h264,
+# cinepak, pixfmt) already track.
+criterion = "0.5"
+
+# Round 173 benches. Each binary lives in `benches/<name>.rs` and is
+# self-contained — every PCM input is synthesised in-bench from a
+# deterministic xorshift seed and fed through the crate's public
+# `mulaw` / `alaw` per-sample helpers plus the trait-surface
+# Decoder / Encoder produced by `mulaw::make_decoder` /
+# `mulaw::make_encoder` (and the A-law equivalents). No `docs/`
+# fixtures or external files are read. Run with:
+#     cargo bench -p oxideav-g711 --bench <name>
+[[bench]]
+name = "decode"
+harness = false
+
+[[bench]]
+name = "encode"
+harness = false
+
+[[bench]]
+name = "roundtrip"
+harness = false

@@ -102,6 +102,28 @@ construction without the registry lookup.
   A-law ~39–49 dB). Comfortably above the ~38 dB SQNR design point
   the G.711 staged Recommendation cites for voice-band tones.
 
+## Benchmarks
+
+Criterion bench harnesses ship under `benches/` for the per-sample
+LUT decode + arithmetic encode hot paths and for the trait-surface
+Decoder/Encoder framing overhead. Every input is synthesised
+in-bench from a deterministic xorshift seed, so the scenarios are
+self-contained — no fixture files, no external corpus.
+
+```sh
+cargo bench -p oxideav-g711 --bench decode
+cargo bench -p oxideav-g711 --bench encode
+cargo bench -p oxideav-g711 --bench roundtrip
+```
+
+Per-sample LUT decode tops out around 5.5 GiB/s (µ-law and A-law
+roughly tied); per-sample arithmetic encode is ~1.5 GiB/s for µ-law
+and ~1.4 GiB/s for A-law (segment-search loop, not LUT-bound). The
+full trait-surface encode→decode round-trip lands around 1 GiB/s
+on aarch64-darwin including factory construction. Run them again
+after any change to the encode segment search or the inner LUT
+load to spot regressions.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

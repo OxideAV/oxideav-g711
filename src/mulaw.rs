@@ -59,7 +59,13 @@ pub fn encode_sample(sample: i16) -> u8 {
 
 // -------------- decoder --------------
 
-pub(crate) fn make_decoder(params: &CodecParameters) -> Result<Box<dyn Decoder>> {
+/// Build a boxed [`Decoder`] for G.711 µ-law with the given codec
+/// parameters. This is the direct-factory entry point — the
+/// [`crate::register`] / [`crate::register_codecs`] paths install
+/// this same function into the codec registry, so callers who don't
+/// want a registry lookup may invoke this directly with `params`
+/// they constructed manually.
+pub fn make_decoder(params: &CodecParameters) -> Result<Box<dyn Decoder>> {
     let channels = params.channels.unwrap_or(1);
     if channels == 0 {
         return Err(Error::unsupported(
@@ -140,7 +146,9 @@ impl Decoder for UlawDecoder {
 
 // -------------- encoder --------------
 
-pub(crate) fn make_encoder(params: &CodecParameters) -> Result<Box<dyn Encoder>> {
+/// Build a boxed [`Encoder`] for G.711 µ-law with the given codec
+/// parameters. Direct-factory counterpart to [`make_decoder`].
+pub fn make_encoder(params: &CodecParameters) -> Result<Box<dyn Encoder>> {
     let channels = params.channels.unwrap_or(1);
     if channels == 0 {
         return Err(Error::unsupported(

@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- add Criterion bench harnesses (`decode`, `encode`, `roundtrip`)
+  covering the per-sample LUT decode + arithmetic encode hot paths
+  and the trait-surface Decoder/Encoder framing overhead. Each
+  scenario is self-contained (deterministic xorshift PCM, no
+  fixtures) so future optimisation rounds can A/B-test their
+  changes against a stable baseline. Initial measurements on
+  aarch64-darwin: per-sample LUT decode ~5.5 GiB/s; per-sample
+  arithmetic encode ~1.5 GiB/s (µ-law) / ~1.4 GiB/s (A-law);
+  full encode+decode round-trip ~1.0 GiB/s through the trait
+  surface. Run with `cargo bench -p oxideav-g711 --bench <name>`.
+- promote `mulaw::make_decoder` / `mulaw::make_encoder` /
+  `alaw::make_decoder` / `alaw::make_encoder` from `pub(crate)` to
+  `pub`, matching the dual-API convention (registry path **and**
+  direct `make_` factory endpoints) the README already documents.
+  No behavioural change; the trait-surface objects returned were
+  already reachable via the registry, the direct path is now also
+  callable without a `CodecRegistry` round-trip.
 - add exhaustive S16-domain property sweep gated on
   `cfg(not(debug_assertions))` — every encode→decode round-trip is
   checked against the per-segment quantization-step bound derived from
