@@ -158,6 +158,36 @@ Initial runs cleared 20 000–80 000 iterations per target on
 aarch64-darwin. Corpus and crash artifacts live under `fuzz/` and
 are `.gitignore`d.
 
+## Profiling
+
+A flat profiling driver ships at `examples/profile_g711.rs` for
+`samply` / `cargo flamegraph` / `perf record` capture. Criterion's
+warm-up + sampling + estimator layers show up in those tools and
+bury the real codec hot paths (LUT load, segment-search loop,
+on-wire inversion); this driver instead runs a fixed iteration
+count with a single `Instant::now()` / `elapsed()` pair around the
+whole pass. The five scenarios mirror the Criterion benches byte-
+for-byte — same xorshift32 seeds — so a profile capture and a
+bench row correspond directly. Each pass prints its own throughput
+line so the binary also doubles as a quick A/B harness for the
+inner tweak-remeasure loop when Criterion's per-run overhead is
+too coarse.
+
+```sh
+cargo build --example profile_g711 --release
+samply record -- ./target/release/examples/profile_g711 encode 5000
+samply record -- ./target/release/examples/profile_g711 decode 5000
+
+# or with cargo flamegraph (needs `cargo install flamegraph`):
+cargo flamegraph --example profile_g711 -- roundtrip 5000
+```
+
+Modes are `decode` / `encode` / `roundtrip` / `all` (default).
+Decode rows walk both the per-sample LUT path and the trait-surface
+Decoder path so the gap between them isolates the framing cost from
+the inner-loop cost; encode rows do the same for the arithmetic
+encode path vs. the trait-surface Encoder.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

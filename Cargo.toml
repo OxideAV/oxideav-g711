@@ -44,3 +44,13 @@ harness = false
 [[bench]]
 name = "roundtrip"
 harness = false
+
+# Round 189 (depth-mode profiling): flat measure-this-thing driver
+# for `samply` / `cargo flamegraph` / `perf record`. Mirrors the
+# `benches/{decode,encode,roundtrip}.rs` scenarios byte-for-byte so
+# a profile capture corresponds to the bench rows. Pure-Rust, no
+# extra deps — uses only `std::time::Instant` and the crate's own
+# public per-sample helpers + trait-surface factories.
+[[example]]
+name = "profile_g711"
+path = "examples/profile_g711.rs"

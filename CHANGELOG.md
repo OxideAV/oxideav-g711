@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- add a standalone profiling driver as `examples/profile_g711.rs` for
+  `samply` / `cargo flamegraph` / `perf record`. The driver mirrors
+  the three Criterion bench harness scenarios byte-for-byte (same
+  xorshift32 seeds, same five mulaw / alaw × mono / stereo / 8ch
+  shapes) but runs a flat fixed-iteration loop with a single
+  `Instant::now()` / `elapsed()` pair around the whole pass — no
+  Criterion warm-up / sampling / estimator layers in the profile,
+  so the codec hot paths (256-entry decode LUT load, encode
+  sign-extract + bias + segment-search top-bit loop, on-wire
+  inversion) and the trait-surface framing overhead (LE byte
+  packing, packet validation, channel-count modulo, output queue
+  management) are what shows up in the flamegraph. Each scenario
+  prints its own throughput row so the binary also doubles as a
+  quick A/B harness for the inner tweak-remeasure loop when
+  Criterion's per-run overhead is too coarse. No new dependencies
+  (`std::time::Instant` + the crate's existing public per-sample
+  helpers / trait-surface factories). Run with
+  `cargo run --example profile_g711 --release -- [mode] [iters]`
+  where `mode` is one of `decode` / `encode` / `roundtrip` / `all`.
 - add a libFuzzer-driven `fuzz/` package with three targets covering
   the framing wrapper and per-sample invariants that the existing
   exhaustive bit-exact tests do not directly exercise as
