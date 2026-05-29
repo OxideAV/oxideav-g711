@@ -1,0 +1,84 @@
+[package]
+name = "oxideav-g711-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+# G.711 is a stateless per-sample companding codec — there is no
+# framing layer, no entropy coder, no inter-sample state. Every
+# encoded byte decodes to exactly one S16 PCM sample and vice
+# versa, so the spec-derived 256-byte decode LUT and the 16-segment
+# arithmetic encoder are already covered exhaustively by the
+# `bit_exact_reference` test (encode of all 65 536 i16 inputs,
+# decode of all 256 bytes). The fuzzer's job here is therefore to
+# pound the **trait surface** — `Decoder::send_packet` /
+# `receive_frame`, `Encoder::send_frame` / `receive_packet` — with
+# attacker-controlled channel counts, packet lengths and frame byte
+# blobs. The single-sample math is bit-exact; the framing wrapper
+# is where panics, integer overflows, or attacker-driven
+# allocations could plausibly hide.
+#
+# Three targets cover the three risk shapes:
+#
+# - **`decode_pipeline`**: arbitrary bytes through both
+#   `mulaw::UlawDecoder` and `alaw::AlawDecoder` at attacker-chosen
+#   channel counts (1..=8 — the `pkt.len() % channels` rejection
+#   path lives here). Empty packets and pre-EOF flushes are also
+#   exercised. Output is discarded.
+# - **`encode_pipeline`**: arbitrary bytes interpreted as i16 PCM,
+#   fed through both encoders at attacker-chosen channels + sample
+#   rate, then the produced packet is fed back through the matching
+#   decoder. The decode output must be bit-exact against
+#   `decode_sample(encode_sample(s))` applied per-sample (i.e. the
+#   trait surface is a faithful wrapper around the per-sample math
+#   already test-pinned by `bit_exact_reference`). This catches any
+#   framing-layer skew between the two surfaces.
+# - **`per_sample_invariants`**: the per-sample contract — sign
+#   symmetry (`decode(b) == -decode(b ^ 0x80)` for non-zero magnitudes
+#   in A-law; for µ-law one half-step rounding difference is
+#   permitted), quantization-step bound (`|decode(encode(s)) - s|`
+#   stays within the spec-derived per-segment step), and the
+#   encoder's projection-idempotence (`encode(decode(encode(s))) ==
+#   encode(s)`). These properties hold *by construction* in the
+#   crate; the fuzzer drives them across attacker-chosen i16 / u8
+#   sequences as a regression net against future hot-path
+#   refactors.
+[dependencies]
+libfuzzer-sys = "0.4"
+oxideav-core = "0.1"
+
+[dependencies.oxideav-g711]
+path = ".."
+
+# Prevent this fuzz package from being pulled into the umbrella
+# workspace at `crates/*` glob-resolve time.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+# ------------------------------------------------------------------
+# Fuzz targets.
+# ------------------------------------------------------------------
+
+[[bin]]
+name = "decode_pipeline"
+path = "fuzz_targets/decode_pipeline.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "encode_pipeline"
+path = "fuzz_targets/encode_pipeline.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "per_sample_invariants"
+path = "fuzz_targets/per_sample_invariants.rs"
+test = false
+doc = false

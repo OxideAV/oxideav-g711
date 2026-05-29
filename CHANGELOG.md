@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- add a libFuzzer-driven `fuzz/` package with three targets covering
+  the framing wrapper and per-sample invariants that the existing
+  exhaustive bit-exact tests do not directly exercise as
+  panic-/UB-freedom contracts. **`decode_pipeline`** drives arbitrary
+  bytes through `mulaw::UlawDecoder` and `alaw::AlawDecoder` with
+  attacker-chosen channel counts (1..=8), hammering the
+  `pkt.data.len() % channels` rejection path, the empty-packet early
+  return, the double-`send_packet` rejection, and the post-flush
+  `Eof` path. **`encode_pipeline`** drives arbitrary i16 PCM through
+  both encoders at attacker-chosen channels (1..=8) and sample rate
+  (1..=192 000), then back through the matching decoder, and asserts
+  the trait-surface output equals the per-sample baseline
+  `decode_sample(encode_sample(s))` applied verbatim — catching any
+  framing-level skew (endianness, padding, channel shuffle).
+  **`per_sample_invariants`** drives `encode_sample` / `decode_sample`
+  directly and asserts (a) projection idempotence
+  `encode(decode(encode(s))) == encode(s)` modulo the documented µ-law
+  −0/+0 canonicalisation (`0x7F → 0xFF` when the encoder collapses
+  the two zero codewords), (b) sign symmetry on the codeword side
+  (`decode(b) == −decode(b ^ 0x80)` except at the µ-law zero
+  codepoint), and (c) the per-segment quantisation-step bound with
+  the spec-derived saturation slack (644 LSB for µ-law above ±32 635,
+  512 LSB for A-law above ±32 256) — the same bounds the
+  `quantization_property` test pins on the exhaustive sweep. Runs
+  clean against 20 000–80 000 iterations per target on
+  aarch64-darwin; corpus and artifacts live under `fuzz/` and are
+  `.gitignore`d. Run with
+  `cargo +nightly fuzz run <target>` (cargo-fuzz required).
 - add Criterion bench harnesses (`decode`, `encode`, `roundtrip`)
   covering the per-sample LUT decode + arithmetic encode hot paths
   and the trait-surface Decoder/Encoder framing overhead. Each

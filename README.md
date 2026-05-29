@@ -124,6 +124,40 @@ on aarch64-darwin including factory construction. Run them again
 after any change to the encode segment search or the inner LUT
 load to spot regressions.
 
+## Fuzzing
+
+A libFuzzer-driven [`fuzz/`](fuzz/) package ships three targets that
+exercise the framing wrapper and per-sample invariants as panic- /
+UB-freedom contracts. The exhaustive bit-exact reference test
+already pins every encode and decode codepoint individually; the
+fuzzer's job is to drive **the trait-surface wrapper** at attacker-
+chosen channel counts, packet shapes, and sample rates, plus the
+per-sample helpers across (i16 sample, u8 codeword, law) triples
+the unit tests do not directly hammer.
+
+- `decode_pipeline` — arbitrary bytes through both decoders at
+  attacker channel counts (1..=8); empty / odd-length / repeated-
+  send / post-flush paths.
+- `encode_pipeline` — arbitrary i16 PCM through both encoders, then
+  back through the matching decoder; the trait-surface result must
+  equal the per-sample `decode_sample(encode_sample(s))` baseline.
+- `per_sample_invariants` — projection idempotence (with the
+  documented µ-law −0/+0 collapse), sign symmetry, and the
+  spec-derived per-segment quantisation-step bound applied to every
+  attacker-chosen sample.
+
+```sh
+cargo +nightly fuzz run decode_pipeline
+cargo +nightly fuzz run encode_pipeline
+cargo +nightly fuzz run per_sample_invariants
+```
+
+Requires the [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz)
+sub-command and a nightly toolchain (libFuzzer needs `-Zsanitizer`).
+Initial runs cleared 20 000–80 000 iterations per target on
+aarch64-darwin. Corpus and crash artifacts live under `fuzz/` and
+are `.gitignore`d.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
