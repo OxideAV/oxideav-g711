@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.7](https://github.com/OxideAV/oxideav-g711/compare/v0.0.6...v0.0.7) - 2026-05-29
+
+### Other
+
+- flat profiling driver mirroring bench scenarios (r189)
+- libFuzzer harnesses for framing + per-sample invariants (r180)
+- criterion harnesses for decode / encode / roundtrip (r173)
+- spec-derived property sweep + PSNR floor regressions (r121)
+- re-document the canonical codec-id strings
+
 ### Other
 
 - add a standalone profiling driver as `examples/profile_g711.rs` for
