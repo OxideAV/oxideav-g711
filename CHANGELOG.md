@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- benches: add `streaming` Criterion harness (r206) timing the
+  one-encoder-and-decoder-pair-reused-across-many-frames pattern that
+  real PSTN sessions actually exercise. The existing r173 `roundtrip`
+  bench constructs a fresh encoder + decoder pair per `b.iter` and
+  drives one frame through, which charges factory cost in every
+  sample; the new streaming harness builds the pair ONCE outside the
+  timed region (via `iter_batched`) and drives a configurable burst
+  inside, so the row reflects steady-state per-frame queue traversal
+  cost rather than amortised factory cost. Five scenarios mirror the
+  r201 `streaming_pipeline` fuzz target's shapes byte-for-byte: 50 ×
+  20 ms µ-law mono / A-law mono / µ-law stereo at 8 kHz (canonical
+  PSTN packetisation — ITU-T G.711 §1 / RFC 3551 §4.5.14); 50 × 20 ms
+  µ-law mono with deferred drain (queue all 50 packets first, drain
+  after, exercising the encoder `VecDeque<Packet>` at depth 50); and
+  100 × 10 ms 8-channel A-law at 48 kHz (largest cumulative working
+  set, stressing queue + per-channel interleave together). All
+  inputs are synthesised in-bench from xorshift32 seeds that match
+  the r173 helpers — no `docs/` fixtures, no external corpus.
+  Measured on aarch64-darwin: µ-law mono 8 kHz x50 ≈ 760 MiB/s,
+  A-law mono 8 kHz x50 ≈ 749 MiB/s, µ-law stereo 8 kHz x50 ≈ 853
+  MiB/s, µ-law mono deferred ≈ 745 MiB/s, A-law 8ch 48 kHz x100 ≈
+  985 MiB/s. The deferred-vs-eager comparison gives future
+  optimisation rounds (e.g. flattening the encoder queue to a single-
+  slot Option or vectorising the per-frame interleave) a stable
+  baseline to A/B against. Run with `cargo bench -p oxideav-g711
+  --bench streaming`.
 - fuzz: add `streaming_pipeline` libFuzzer target (r201) covering
   multi-frame / multi-packet sessions through a single encoder +
   decoder pair. Complements the r180 trio (`decode_pipeline`,

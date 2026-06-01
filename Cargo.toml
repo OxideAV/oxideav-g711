@@ -45,6 +45,18 @@ harness = false
 name = "roundtrip"
 harness = false
 
+# Round 206 (depth-mode benchmarks, streaming follow-up to r173):
+# measures the streaming session pattern — one encoder + decoder pair
+# reused across a burst of frames + packets, mirroring the
+# `streaming_pipeline` fuzz target's lifecycle. Eager-drain (one
+# packet out per send_frame) plus a deferred-drain shape that
+# exercises the encoder's `VecDeque<Packet>` queue at its deepest
+# depth. Same `cargo bench -p oxideav-g711 --bench streaming` shape
+# as the other benches.
+[[bench]]
+name = "streaming"
+harness = false
+
 # Round 189 (depth-mode profiling): flat measure-this-thing driver
 # for `samply` / `cargo flamegraph` / `perf record`. Mirrors the
 # `benches/{decode,encode,roundtrip}.rs` scenarios byte-for-byte so

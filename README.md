@@ -114,15 +114,20 @@ self-contained — no fixture files, no external corpus.
 cargo bench -p oxideav-g711 --bench decode
 cargo bench -p oxideav-g711 --bench encode
 cargo bench -p oxideav-g711 --bench roundtrip
+cargo bench -p oxideav-g711 --bench streaming
 ```
 
 Per-sample LUT decode tops out around 5.5 GiB/s (µ-law and A-law
 roughly tied); per-sample arithmetic encode is ~1.5 GiB/s for µ-law
 and ~1.4 GiB/s for A-law (segment-search loop, not LUT-bound). The
 full trait-surface encode→decode round-trip lands around 1 GiB/s
-on aarch64-darwin including factory construction. Run them again
-after any change to the encode segment search or the inner LUT
-load to spot regressions.
+on aarch64-darwin including factory construction. The r206
+**streaming** bench amortises construction across a 50-frame PSTN
+20 ms burst and tops out around 760–985 MiB/s end-to-end depending
+on channel count + rate (the per-frame trait-surface overhead is
+what shows up once factory cost is amortised). Run them again
+after any change to the encode segment search, the inner LUT
+load, or the encoder/decoder queue management to spot regressions.
 
 ## Fuzzing
 
