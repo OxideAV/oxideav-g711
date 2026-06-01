@@ -145,18 +145,30 @@ the unit tests do not directly hammer.
   documented µ-law −0/+0 collapse), sign symmetry, and the
   spec-derived per-segment quantisation-step bound applied to every
   attacker-chosen sample.
+- `streaming_pipeline` — multi-frame / multi-packet session through
+  one encoder + decoder pair: drives 1..=8 frames per session at
+  attacker-chosen channels + sample rate + drain order (eager vs.
+  deferred), with mid-stream decoder `flush()` interleaved. Asserts
+  the encoder queue is FIFO + fully drained, pts propagates intact
+  across the encode → decode boundary, the decoder's `pending` slot
+  always advances cleanly across repeat cycles, and post-stream the
+  decoder returns `NeedMore` (pre-flush) / `Eof` (post-flush) as
+  the trait surface contracts demand.
 
 ```sh
 cargo +nightly fuzz run decode_pipeline
 cargo +nightly fuzz run encode_pipeline
 cargo +nightly fuzz run per_sample_invariants
+cargo +nightly fuzz run streaming_pipeline
 ```
 
 Requires the [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz)
 sub-command and a nightly toolchain (libFuzzer needs `-Zsanitizer`).
 Initial runs cleared 20 000–80 000 iterations per target on
-aarch64-darwin. Corpus and crash artifacts live under `fuzz/` and
-are `.gitignore`d.
+aarch64-darwin for the first three targets; the r201 streaming
+target cleared **7 066 742 iterations / 60 s clean** on the same
+host (≈ 115 k exec/s, 433 cov / 1563 ft saturation). Corpus and
+crash artifacts live under `fuzz/` and are `.gitignore`d.
 
 ## Profiling
 

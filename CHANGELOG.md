@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Other
+
+- fuzz: add `streaming_pipeline` libFuzzer target (r201) covering
+  multi-frame / multi-packet sessions through a single encoder +
+  decoder pair. Complements the r180 trio (`decode_pipeline`,
+  `encode_pipeline`, `per_sample_invariants`) by exercising the
+  cross-frame state the trait surface accumulates — encoder
+  `VecDeque<Packet>` FIFO ordering (eager vs. deferred drain), pts
+  propagation across many frames, decoder `pending` slot under
+  repeated send/receive cycles, mid-stream `flush()` semantics, and
+  the post-stream `NeedMore` vs. `Eof` contract on the decoder. The
+  per-sample baseline (`decode_sample(encode_sample(s))` applied
+  verbatim, the same oracle `encode_pipeline` uses) is asserted
+  per-frame so any framing-level skew across the multi-frame
+  lifecycle surfaces immediately. Attacker-controlled inputs: codec
+  selector (µ-law / A-law), channels (1..=8), sample rate
+  (1..=192 000), frame count (1..=8), per-frame samples/channel
+  (0..=256), drain order (eager / deferred), mid-stream-flush flag.
+  Runs clean against 7 066 742 iterations / 60 s on aarch64-darwin
+  (≈115 k exec/s, 433 cov / 1563 ft saturation). Run with
+  `cargo +nightly fuzz run streaming_pipeline`.
+
 ## [0.0.7](https://github.com/OxideAV/oxideav-g711/compare/v0.0.6...v0.0.7) - 2026-05-29
 
 ### Other

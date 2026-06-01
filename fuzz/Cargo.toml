@@ -21,7 +21,7 @@ cargo-fuzz = true
 # is where panics, integer overflows, or attacker-driven
 # allocations could plausibly hide.
 #
-# Three targets cover the three risk shapes:
+# Four targets cover the four risk shapes:
 #
 # - **`decode_pipeline`**: arbitrary bytes through both
 #   `mulaw::UlawDecoder` and `alaw::AlawDecoder` at attacker-chosen
@@ -46,6 +46,15 @@ cargo-fuzz = true
 #   crate; the fuzzer drives them across attacker-chosen i16 / u8
 #   sequences as a regression net against future hot-path
 #   refactors.
+# - **`streaming_pipeline`** (r201): multi-frame / multi-packet
+#   session through one encoder + decoder pair. Exercises the
+#   encoder's `VecDeque<Packet>` queue (FIFO order, eager vs.
+#   deferred drain), pts/dts propagation across many frames, the
+#   decoder's `pending` slot under repeated send/receive cycles,
+#   mid-stream `flush()` semantics on the decoder, and post-stream
+#   `NeedMore` vs. `Eof` behaviour. Complements `encode_pipeline`
+#   (which is a single-frame oracle) by hammering cross-frame state
+#   that only appears in a multi-frame lifecycle.
 [dependencies]
 libfuzzer-sys = "0.4"
 oxideav-core = "0.1"
@@ -80,5 +89,11 @@ doc = false
 [[bin]]
 name = "per_sample_invariants"
 path = "fuzz_targets/per_sample_invariants.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "streaming_pipeline"
+path = "fuzz_targets/streaming_pipeline.rs"
 test = false
 doc = false
