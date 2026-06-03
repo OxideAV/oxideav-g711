@@ -21,7 +21,7 @@ cargo-fuzz = true
 # is where panics, integer overflows, or attacker-driven
 # allocations could plausibly hide.
 #
-# Four targets cover the four risk shapes:
+# Five targets cover the five risk shapes:
 #
 # - **`decode_pipeline`**: arbitrary bytes through both
 #   `mulaw::UlawDecoder` and `alaw::AlawDecoder` at attacker-chosen
@@ -55,6 +55,19 @@ cargo-fuzz = true
 #   `NeedMore` vs. `Eof` behaviour. Complements `encode_pipeline`
 #   (which is a single-frame oracle) by hammering cross-frame state
 #   that only appears in a multi-frame lifecycle.
+# - **`factory_params`** (r224): adversarial `CodecParameters`
+#   shapes through all four `make_decoder` / `make_encoder` entry
+#   points (mulaw + alaw, decoder + encoder). Targets the
+#   parameter-validation surface the other four fuzzers do not
+#   reach — `channels == 0`, all twelve named `SampleFormat`
+#   variants on the encoder's non-S16 rejection ladder, adversarial
+#   `codec_id` strings (empty, mismatched law, free-form), and the
+#   full u32 `sample_rate` range including `0` and `u32::MAX` (the
+#   latter must not overflow the `i64` cast when building the
+#   encoder's `TimeBase`). Successful constructions are exercised
+#   with a small attacker payload to confirm the produced trait
+#   object survives one send / receive / flush cycle without
+#   panicking.
 [dependencies]
 libfuzzer-sys = "0.4"
 oxideav-core = "0.1"
@@ -95,5 +108,11 @@ doc = false
 [[bin]]
 name = "streaming_pipeline"
 path = "fuzz_targets/streaming_pipeline.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "factory_params"
+path = "fuzz_targets/factory_params.rs"
 test = false
 doc = false

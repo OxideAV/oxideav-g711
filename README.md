@@ -141,14 +141,14 @@ load, or the encoder/decoder queue management to spot regressions.
 
 ## Fuzzing
 
-A libFuzzer-driven [`fuzz/`](fuzz/) package ships three targets that
-exercise the framing wrapper and per-sample invariants as panic- /
-UB-freedom contracts. The exhaustive bit-exact reference test
-already pins every encode and decode codepoint individually; the
-fuzzer's job is to drive **the trait-surface wrapper** at attacker-
-chosen channel counts, packet shapes, and sample rates, plus the
-per-sample helpers across (i16 sample, u8 codeword, law) triples
-the unit tests do not directly hammer.
+A libFuzzer-driven [`fuzz/`](fuzz/) package ships five targets that
+exercise the framing wrapper, the parameter-validation surface, and
+per-sample invariants as panic- / UB-freedom contracts. The exhaustive
+bit-exact reference test already pins every encode and decode codepoint
+individually; the fuzzer's job is to drive **the trait-surface wrapper**
+at attacker-chosen channel counts, packet shapes, and sample rates,
+plus the per-sample helpers across (i16 sample, u8 codeword, law)
+triples the unit tests do not directly hammer.
 
 - `decode_pipeline` — arbitrary bytes through both decoders at
   attacker channel counts (1..=8); empty / odd-length / repeated-
@@ -169,12 +169,26 @@ the unit tests do not directly hammer.
   always advances cleanly across repeat cycles, and post-stream the
   decoder returns `NeedMore` (pre-flush) / `Eof` (post-flush) as
   the trait surface contracts demand.
+- `factory_params` — adversarial `CodecParameters` shapes through
+  all four `make_decoder` / `make_encoder` entry points (µ-law +
+  A-law, decoder + encoder). Drives the rejection branches the
+  other four targets do not reach: `channels == 0`, every named
+  `SampleFormat` variant on the encoder's non-`S16` rejection
+  ladder (`U8`, `S8`, `S24`, `S32`, `F32`, `F64` plus four planar
+  shapes), free-form `codec_id` strings (empty, mismatched law,
+  arbitrary), and the full `u32` sample-rate range including `0`
+  and `u32::MAX` (the latter must not overflow when the encoder
+  casts it to `i64` for its `TimeBase`). Successful constructions
+  are exercised with a small attacker payload to confirm the
+  produced trait object survives one send / receive / flush cycle
+  cleanly.
 
 ```sh
 cargo +nightly fuzz run decode_pipeline
 cargo +nightly fuzz run encode_pipeline
 cargo +nightly fuzz run per_sample_invariants
 cargo +nightly fuzz run streaming_pipeline
+cargo +nightly fuzz run factory_params
 ```
 
 Requires the [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz)
@@ -182,8 +196,11 @@ sub-command and a nightly toolchain (libFuzzer needs `-Zsanitizer`).
 Initial runs cleared 20 000–80 000 iterations per target on
 aarch64-darwin for the first three targets; the r201 streaming
 target cleared **7 066 742 iterations / 60 s clean** on the same
-host (≈ 115 k exec/s, 433 cov / 1563 ft saturation). Corpus and
-crash artifacts live under `fuzz/` and are `.gitignore`d.
+host (≈ 115 k exec/s, 433 cov / 1563 ft saturation); the r224
+`factory_params` target cleared **18 096 276 iterations / 60 s
+clean** on the same host (≈ 297 k exec/s, 399 cov / 628 ft
+saturation across 160 corpus entries). Corpus and crash artifacts
+live under `fuzz/` and are `.gitignore`d.
 
 ## Profiling
 

@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- fuzz: new `factory_params` target (r224) — fifth libFuzzer harness
+  exercising the parameter-validation surface across all four
+  `make_decoder` / `make_encoder` entry points (µ-law + A-law,
+  decoder + encoder). Targets the three rejection branches the
+  existing four targets do not reach: `channels == Some(0)`, every
+  named `SampleFormat` variant on the encoder's non-`S16` rejection
+  ladder (`U8`, `S8`, `S24`, `S32`, `F32`, `F64`, plus `U8P`,
+  `S16P`, `S32P`, `F32P`, `F64P`), and free-form `codec_id` strings
+  (empty, mismatched law, arbitrary token). Also covers the full
+  `u32` sample-rate range including `0` and `u32::MAX` — the latter
+  must not overflow when the encoder casts it to `i64` while
+  constructing its `TimeBase`. Successful constructions are
+  exercised with a small attacker payload through one send /
+  receive / flush cycle to confirm the produced trait object itself
+  stays total — not just the factory call. Cleared
+  **18 096 276 iterations / 60 s clean** on aarch64-darwin nightly
+  (≈ 297 k exec/s, 399 cov / 628 ft saturation across 160 corpus
+  entries), no panics, no aborts. Per the round-selection memory's
+  "ONE of fuzz / bench / profile per round" rule for saturated
+  codecs (already saturated at four fuzz targets, four criterion
+  bench files, and a flat profiling driver), this is the
+  parameter-surface depth-mode pick: previous fuzz coverage had
+  channels pre-clamped to `1..=8` and `sample_format` always
+  defaulted (`None`), leaving the encoder's twelve `SampleFormat`
+  rejection branches and the channels-zero branch dark. The new
+  target makes the parameter-validation surface a regression-pinned
+  property the same way the per-sample math and the framing
+  wrapper already are.
 - tests: promote every entry in `tests/docs_corpus.rs` from
   `Tier::ReportOnly` to `Tier::BitExact` (r218). The r205 corpus
   integration brief explicitly says fixtures graduate "in the very
