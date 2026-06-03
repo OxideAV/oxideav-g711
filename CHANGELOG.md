@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- examples: extend `profile_g711.rs` with a `streaming` mode (r213)
+  mirroring the r206 `benches/streaming.rs` Criterion scenarios
+  byte-for-byte (50 × 20 ms µ-law mono / A-law mono / µ-law stereo
+  at 8 kHz; 50 × 20 ms µ-law mono deferred-drain; 100 × 10 ms
+  8-channel A-law at 48 kHz — same frame counts, same channel
+  layouts, same xorshift32 seeds as the benches). The existing four
+  profile modes (`decode`, `encode`, `roundtrip`, `all`) build a
+  fresh encoder + decoder pair per iter, which is the right shape
+  for the r173 per-call benches but a poor profile target for
+  steady-state PSTN sessions where one pair is reused across
+  hundreds of frames and the cost that dominates is queue
+  traversal (encoder `VecDeque<Packet>` + decoder
+  `pending: Option<Packet>` slot) plus per-frame interleave + LE
+  byte unpack. The new mode builds the pair once outside the timed
+  region — same shape as `iter_batched(BatchSize::SmallInput)` in
+  the r206 bench — and drives a configurable burst inside, so a
+  samply / flamegraph capture of the streaming mode lines up 1:1
+  with the matching `streaming_*` bench rows and with the r201
+  `streaming_pipeline` fuzz target's code paths (eager vs. deferred
+  drain, pts propagation through the encoder queue, decoder
+  `pending` slot under repeated send/receive cycles). The `all`
+  mode now runs streaming after roundtrip. No new dependencies, no
+  fixture reads, no public-API changes; pure depth-mode addition
+  per the round-selection memory's "ONE of fuzz / bench / profile
+  per round" rule for saturated codecs. Measured on aarch64-darwin
+  with default iter counts: streaming/mulaw/mono/8k/20ms/x50/eager
+  ≈ 691 MiB/s, streaming/alaw/mono/8k/20ms/x50/eager ≈ 677 MiB/s,
+  streaming/mulaw/stereo/8k/20ms/x50/eager ≈ 805 MiB/s,
+  streaming/mulaw/mono/8k/20ms/x50/deferred ≈ 715 MiB/s,
+  streaming/alaw/8ch/48k/10ms/x100/eager ≈ 980 MiB/s — in the same
+  ballpark as the r206 bench rows on the same host. Run with
+  `cargo run --example profile_g711 --release -- streaming [iters]`.
 - benches: add `streaming` Criterion harness (r206) timing the
   one-encoder-and-decoder-pair-reused-across-many-frames pattern that
   real PSTN sessions actually exercise. The existing r173 `roundtrip`

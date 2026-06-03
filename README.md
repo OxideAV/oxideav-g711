@@ -199,11 +199,31 @@ samply record -- ./target/release/examples/profile_g711 decode 5000
 cargo flamegraph --example profile_g711 -- roundtrip 5000
 ```
 
-Modes are `decode` / `encode` / `roundtrip` / `all` (default).
-Decode rows walk both the per-sample LUT path and the trait-surface
-Decoder path so the gap between them isolates the framing cost from
-the inner-loop cost; encode rows do the same for the arithmetic
-encode path vs. the trait-surface Encoder.
+Modes are `decode` / `encode` / `roundtrip` / `streaming` / `all`
+(default). Decode rows walk both the per-sample LUT path and the
+trait-surface Decoder path so the gap between them isolates the
+framing cost from the inner-loop cost; encode rows do the same for
+the arithmetic encode path vs. the trait-surface Encoder.
+
+The `streaming` mode (added in r213) reuses one encoder + decoder
+pair across a multi-frame burst — the canonical PSTN session shape
+the per-call `decode` / `encode` / `roundtrip` modes can't capture,
+because those rebuild the pair per iter and so charge factory cost
+in every sample. It mirrors the r206 `benches/streaming.rs`
+Criterion scenarios byte-for-byte (50 × 20 ms µ-law mono / A-law
+mono / µ-law stereo at 8 kHz; 50 × 20 ms µ-law mono with deferred
+drain — queue all 50 packets first, drain after — exercising the
+encoder `VecDeque<Packet>` at depth 50; 100 × 10 ms 8-channel A-law
+at 48 kHz) and the r201 `streaming_pipeline` fuzz target's
+lifecycle, so a samply / flamegraph capture of the streaming mode
+lines up with the matching `streaming_*` bench row and the matching
+fuzz-target code path directly. Measured on aarch64-darwin: ≈
+680–980 MiB/s across the five rows, headlining the OTT-grade A-law
+8 ch / 48 kHz scenario at ≈ 980 MiB/s.
+
+```sh
+samply record -- ./target/release/examples/profile_g711 streaming 500
+```
 
 ## License
 
