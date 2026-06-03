@@ -22,15 +22,21 @@
 //! Tiering:
 //! * `Tier::BitExact` — must match the reference exactly. CI fails on
 //!   any divergence. G.711 is a per-byte LUT so once the container
-//!   parsing is right, every fixture should land here.
+//!   parsing is right, every fixture lands here.
 //! * `Tier::ReportOnly` — log the deltas without failing CI. New or
 //!   under-investigation fixtures start here and graduate to
 //!   `BitExact` once they're shown to be clean.
 //! * `Tier::Ignored` — skipped (e.g. if the docs corpus isn't present
 //!   in the CI checkout).
 //!
-//! All fixtures start `ReportOnly`. They graduate to `BitExact` once
-//! they've been confirmed to round-trip across a CI run.
+//! **r218 promotion**: every fixture in the corpus was confirmed to
+//! produce 100.0000% bit-exact PCM (RMS 0.000, max |diff| 0,
+//! length-match true) on both debug and release builds across r217.
+//! All 13 corpus tests are now `Tier::BitExact` — any future
+//! regression in either the per-sample LUT, the trait-surface
+//! framing, or the in-test container parsers will fail CI. The
+//! ReportOnly tier remains in the enum for any future fixture added
+//! under investigation.
 //!
 //! Note: `oxideav-g711` is its own repository and `docs/` is checked
 //! into the workspace umbrella, NOT into this crate's checkout. When
@@ -513,22 +519,24 @@ fn evaluate(case: &CorpusCase) {
 
 // ---------------------------------------------------------------------------
 // Per-fixture tests — every entry maps 1:1 to a directory under
-// docs/audio/g711/fixtures/. All start `Tier::ReportOnly` per the
-// brief — the driver logs per-channel RMS / match-pct for every
-// fixture and a follow-up round promotes the clean ones to
-// `Tier::BitExact` once CI confirms a 100.00% match. G.711 is a
-// deterministic per-byte LUT so we expect every fixture to graduate
-// in the very next round; any that don't are real bugs in either the
-// decoder or the in-test container parser. The driver still skips
+// docs/audio/g711/fixtures/. All entries below are `Tier::BitExact`
+// after the r218 promotion: every fixture was confirmed to land at
+// 100.0000% sample-exact match on r217 (RMS 0.000, max |diff| 0,
+// length-match true), so any future divergence is a real bug in the
+// per-byte LUT, the trait-surface framing, or the in-test container
+// parsers and CI catches it immediately. The driver still skips
 // gracefully when the fixture corpus isn't present (standalone CI
-// checkout).
+// checkout — `docs/audio/g711/fixtures/` lives in the workspace
+// umbrella, not in this crate's standalone checkout). New fixtures
+// added under investigation may start at `Tier::ReportOnly` and
+// graduate once a CI run pins them at 100.0000%.
 // ---------------------------------------------------------------------------
 
 #[test]
 fn corpus_alaw_mono_16000_0_5s() {
     evaluate(&CorpusCase {
         name: "alaw-mono-16000-0.5s",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -538,7 +546,7 @@ fn corpus_alaw_mono_16000_0_5s() {
 fn corpus_alaw_mono_8000_1s() {
     evaluate(&CorpusCase {
         name: "alaw-mono-8000-1s",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -548,7 +556,7 @@ fn corpus_alaw_mono_8000_1s() {
 fn corpus_alaw_stereo_8000_0_5s() {
     evaluate(&CorpusCase {
         name: "alaw-stereo-8000-0.5s",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -558,7 +566,7 @@ fn corpus_alaw_stereo_8000_0_5s() {
 fn corpus_mulaw_mono_8000_1s() {
     evaluate(&CorpusCase {
         name: "mulaw-mono-8000-1s",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -568,7 +576,7 @@ fn corpus_mulaw_mono_8000_1s() {
 fn corpus_silence_alaw() {
     evaluate(&CorpusCase {
         name: "silence-alaw",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -578,7 +586,7 @@ fn corpus_silence_alaw() {
 fn corpus_silence_mulaw() {
     evaluate(&CorpusCase {
         name: "silence-mulaw",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -588,7 +596,7 @@ fn corpus_silence_mulaw() {
 fn corpus_dc_positive_alaw() {
     evaluate(&CorpusCase {
         name: "dc-positive-alaw",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -598,7 +606,7 @@ fn corpus_dc_positive_alaw() {
 fn corpus_dc_negative_alaw() {
     evaluate(&CorpusCase {
         name: "dc-negative-alaw",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -611,7 +619,7 @@ fn corpus_sine_1khz_alaw_0_5s() {
     // 440 Hz tone in alaw-mono-8000-1s.
     evaluate(&CorpusCase {
         name: "sine-1khz-alaw-0.5s",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -622,7 +630,7 @@ fn corpus_sine_1khz_mulaw_0_5s() {
     // Bonus fixture, µ-law twin of the 1 kHz A-law sine above.
     evaluate(&CorpusCase {
         name: "sine-1khz-mulaw-0.5s",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -636,7 +644,7 @@ fn corpus_au_container_mulaw() {
     // and nothing decode-relevant beyond it).
     evaluate(&CorpusCase {
         name: "au-container-mulaw",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -654,7 +662,7 @@ fn corpus_au_container_mulaw() {
 fn corpus_containerless_raw_alaw_vs_wav_pair_wav_branch() {
     evaluate(&CorpusCase {
         name: "containerless-raw-alaw-vs-wav-pair",
-        tier: Tier::ReportOnly,
+        tier: Tier::BitExact,
         expected_filename: "expected.wav",
         raw_meta: None,
     });
@@ -720,11 +728,24 @@ fn corpus_containerless_raw_alaw_vs_wav_pair_raw_branch() {
     };
     let length_match = our_s16.len() == expected.bytes.len();
     eprintln!(
-        "[ReportOnly] containerless-raw-alaw-vs-wav-pair (raw branch): {}/{} samples exact \
+        "[BitExact] containerless-raw-alaw-vs-wav-pair (raw branch): {}/{} samples exact \
          ({:.4}%), max |diff|={}, length-match={}",
         total_exact, total_n, overall_pct, overall_max_abs, length_match
     );
-    // ReportOnly: don't fail. Promote to hard asserts once CI confirms
-    // the raw branch round-trips cleanly.
-    let _ = length_match;
+    // r218: promoted from ReportOnly to BitExact — r217 confirmed the
+    // raw branch round-trips at 2000/2000 sample-exact (RMS 0.000,
+    // max |diff| 0). Any future divergence in either the bare-bytes
+    // dispatch path or the in-tree A-law LUT now fails CI.
+    assert!(
+        length_match,
+        "containerless-raw-alaw-vs-wav-pair (raw branch): length mismatch \
+         (our {} bytes, expected {} bytes)",
+        our_s16.len(),
+        expected.bytes.len()
+    );
+    assert_eq!(
+        total_exact, total_n,
+        "containerless-raw-alaw-vs-wav-pair (raw branch): not bit-exact \
+         (max |diff|={overall_max_abs}, {overall_pct:.4}% match)"
+    );
 }

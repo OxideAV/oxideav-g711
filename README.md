@@ -77,6 +77,16 @@ construction without the registry lookup.
 
 ### Properties verified by the test suite
 
+- All 13 fixtures in [`docs/audio/g711/fixtures/`](../../docs/audio/g711/fixtures/)
+  are CI-gated at `Tier::BitExact` (r218 promotion). Every fixture
+  round-trips at 100.0000% sample-exact (RMS 0.000, max |diff| 0,
+  length-match true) on both debug and release. Covers A-law /
+  µ-law × mono / stereo / 8 ch wideband, 8 kHz / 16 kHz sample rates,
+  silence + DC saturation extremes, full-range sine sweeps, RIFF WAVE +
+  Sun .au container dispatch, and the containerless raw vs. WAV
+  equivalence pair (both branches). A future divergence in either the
+  per-byte LUT, the trait-surface framing, or the in-test container
+  parsers fails CI immediately.
 - Decode tables match the ITU-T G.711 §2 / §3 reference formulas for
   all 256 bytes of both laws.
 - Encode is bit-exact against the reference Sun/ANSI formulas for all

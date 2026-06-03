@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- tests: promote every entry in `tests/docs_corpus.rs` from
+  `Tier::ReportOnly` to `Tier::BitExact` (r218). The r205 corpus
+  integration brief explicitly says fixtures graduate "in the very
+  next round" once CI confirms a 100.00% match — r217 confirmed
+  every fixture lands at 100.0000% sample-exact (RMS 0.000, max
+  |diff| 0, length-match true) on both debug and release builds.
+  All 13 entries now hard-assert on (a) byte-length equality between
+  decoder output and reference PCM and (b) per-sample bit-exact
+  match across every channel. The promotion covers: A-law mono
+  8 kHz / 16 kHz / stereo 8 kHz; µ-law mono 8 kHz; silence + DC
+  saturation extremes (`silence-alaw`, `silence-mulaw`,
+  `dc-positive-alaw`, `dc-negative-alaw`); 1 kHz full-range sine
+  sweeps (A-law + µ-law); RIFF WAVE codec_tag dispatch (0x0006 +
+  0x0007) and Sun .au encoding dispatch (1 + 27) through their
+  respective container parsers; and the containerless raw-vs-WAV
+  equivalence pair on both branches — the raw branch was previously
+  the only test that logged-without-failing, now it asserts the same
+  way the wav branch does. Per the round-selection memory's "ONE of
+  fuzz / bench / profile per round" rule for saturated codecs this
+  is the natural depth-mode follow-up: the existing fuzz / bench /
+  profile harnesses already exercise the trait surface end-to-end,
+  what was still ReportOnly was the in-tree corpus's gating tier.
+  No code change in `src/` — the same decoder paths that
+  successfully passed in ReportOnly mode are now CI-gated against
+  regression. `Tier::ReportOnly` is kept in the enum so any future
+  fixture added under investigation can ladder up the same way.
 - examples: extend `profile_g711.rs` with a `streaming` mode (r213)
   mirroring the r206 `benches/streaming.rs` Criterion scenarios
   byte-for-byte (50 × 20 ms µ-law mono / A-law mono / µ-law stereo
