@@ -1,10 +1,14 @@
 //! ITU-T G.711 conversion tables.
 //!
 //! Both laws have a 256-entry decode table — generated at compile time from
-//! the bit-layout definitions so the file is self-checking. Encode is
-//! implemented arithmetically in [`crate::mulaw`] / [`crate::alaw`]: a full
-//! 65536-entry encode LUT would work too but costs 128 KiB of static data
-//! that we don't need given how cheap the segment search is.
+//! the bit-layout definitions so the file is self-checking. Encode also
+//! ships a compile-time 65536-entry direct S16 → byte LUT for each law
+//! ([`MULAW_ENCODE`] / [`ALAW_ENCODE`]); the entries are produced by
+//! invoking the arithmetic encoders ([`mulaw_encode_arith`] /
+//! [`alaw_encode_arith`]) at every `i16` value in a `const fn` loop, so the
+//! LUT is bit-exact-by-construction relative to the spec formulas — there
+//! is no second source of truth. Each LUT costs **64 KiB** of static data
+//! (`[u8; 65536]`).
 //!
 //! Reference: ITU-T Recommendation G.711 (11/88), "Pulse code modulation
 //! (PCM) of voice frequencies", §2 (A-law) and §3 (µ-law).
@@ -106,6 +110,113 @@ pub const ALAW_DECODE: [i16; 256] = {
     let mut i = 0;
     while i < 256 {
         t[i] = alaw_decode(i as u8);
+        i += 1;
+    }
+    t
+};
+
+// -------------- compile-time encode LUTs --------------
+//
+// Both encode hot paths can be expressed as a direct S16 → byte LUT
+// (`[u8; 65536]` = 64 KiB per law). The arithmetic encoders below run at
+// compile time inside a `while` loop, so every entry is computed from the
+// spec-derived formulas in §2 / §3. The runtime encoder simply indexes
+// `LUT[(sample as u16) as usize]`, replacing the per-sample bias add +
+// segment-search loop + mantissa shift + on-wire inversion with one load.
+//
+// The arithmetic helpers stay `pub` (not `pub(crate)`) so:
+//   - external callers who really do want one-sample-without-a-64-KiB-LUT
+//     can still reach the formula directly (e.g. a fuzz target asserting
+//     LUT == arith for every byte);
+//   - the LUT itself remains self-checking — the inner loop is the spec.
+
+/// µ-law arithmetic encode, ITU-T G.711 §3.2. Identical math to
+/// [`crate::mulaw::encode_sample`] but expressed as a `const fn` so it
+/// can populate [`MULAW_ENCODE`] at compile time. Public so the in-tree
+/// test suite can assert `MULAW_ENCODE[s] == mulaw_encode_arith(s)` for
+/// every S16 sample without a second source of truth.
+pub const fn mulaw_encode_arith(sample: i16) -> u8 {
+    let mut mag: i32 = sample as i32;
+    let sign_bit: u8 = if mag < 0 { 0x80 } else { 0 };
+    if mag < 0 {
+        mag = -mag;
+    }
+    if mag > 32635 {
+        mag = 32635;
+    }
+    mag += MULAW_BIAS;
+
+    let mut seg: u32 = 7;
+    let mut mask: i32 = 0x4000;
+    while seg > 0 && (mag & mask) == 0 {
+        seg -= 1;
+        mask >>= 1;
+    }
+
+    let mantissa = ((mag >> (seg + 3)) & 0x0F) as u8;
+    let byte = sign_bit | ((seg as u8) << 4) | mantissa;
+    !byte
+}
+
+/// A-law arithmetic encode, ITU-T G.711 §2. `const fn` counterpart of
+/// [`crate::alaw::encode_sample`]; same role as [`mulaw_encode_arith`].
+pub const fn alaw_encode_arith(sample: i16) -> u8 {
+    let mut mag: i32 = sample as i32;
+    let sign_bit: u8 = if mag < 0 { 0x00 } else { 0x80 };
+    if mag < 0 {
+        mag = -mag;
+    }
+    if mag > 32256 {
+        mag = 32256;
+    }
+
+    let (seg, mant): (u32, u32) = if mag < 256 {
+        (0, (mag >> 4) as u32 & 0x0F)
+    } else {
+        let mut seg = 1u32;
+        let mut threshold: i32 = 512;
+        while seg < 7 && mag >= threshold {
+            seg += 1;
+            threshold <<= 1;
+        }
+        let shift = seg + 3;
+        let m = ((mag >> shift) & 0x0F) as u32;
+        (seg, m)
+    };
+
+    let byte = sign_bit | ((seg as u8) << 4) | (mant as u8);
+    byte ^ ALAW_XOR
+}
+
+/// Compile-time 65536-entry µ-law encode LUT. Indexed by the input S16
+/// reinterpreted as a `u16` so callers can write
+/// `MULAW_ENCODE[sample as u16 as usize]`. Every entry is the value
+/// [`mulaw_encode_arith`] would return for that sample, by construction
+/// — the arithmetic formula is the single source of truth.
+///
+/// Declared `static` (not `const`) so the 64 KiB table lives in
+/// `.rodata` and is shared across every call site; with `const` clippy
+/// (1.95+, `large_const_arrays`) warns that each use copies the array,
+/// which we definitely don't want for a 64 KiB hot-path table.
+pub static MULAW_ENCODE: [u8; 65536] = {
+    let mut t = [0u8; 65536];
+    let mut i: u32 = 0;
+    while i < 65536 {
+        // Reinterpret the index as i16: indices 0..=0x7FFF stay positive,
+        // 0x8000..=0xFFFF wrap to negative — the same mapping
+        // `sample as u16 as usize` produces in the runtime lookup.
+        t[i as usize] = mulaw_encode_arith(i as i16);
+        i += 1;
+    }
+    t
+};
+
+/// Compile-time 65536-entry A-law encode LUT. See [`MULAW_ENCODE`].
+pub static ALAW_ENCODE: [u8; 65536] = {
+    let mut t = [0u8; 65536];
+    let mut i: u32 = 0;
+    while i < 65536 {
+        t[i as usize] = alaw_encode_arith(i as i16);
         i += 1;
     }
     t

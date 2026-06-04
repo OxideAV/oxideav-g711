@@ -9,18 +9,32 @@ use oxideav_core::{
 use oxideav_core::{Decoder, Encoder};
 use std::collections::VecDeque;
 
-use crate::tables::{ALAW_DECODE, ALAW_XOR};
+use crate::tables::{alaw_encode_arith, ALAW_DECODE, ALAW_ENCODE};
 
-/// Decode one A-law byte to a linear S16 sample.
+/// Decode one A-law byte to a linear S16 sample. Direct LUT lookup
+/// against [`ALAW_DECODE`].
 #[inline]
 pub fn decode_sample(byte: u8) -> i16 {
     ALAW_DECODE[byte as usize]
 }
 
-/// Encode one S16 sample as an A-law byte (ITU-T G.711 §2, arithmetic
-/// form).
+/// Encode one S16 sample as an A-law byte (ITU-T G.711 §2). Direct LUT
+/// lookup against [`ALAW_ENCODE`] — every entry in that table was
+/// produced at compile time by [`encode_sample_arith`] (the arithmetic
+/// implementation of §2), so the table is bit-exact-by-construction
+/// relative to the spec formula and the runtime hot path is a single
+/// 64 KiB-LUT load instead of segment branch + mantissa shift + XOR.
 ///
-/// Algorithm (mirror of [`crate::tables::alaw_decode`]):
+/// If you want the formula instead of the table — e.g. to assert
+/// equality with the LUT in a test — call [`encode_sample_arith`].
+#[inline]
+pub fn encode_sample(sample: i16) -> u8 {
+    ALAW_ENCODE[sample as u16 as usize]
+}
+
+/// Arithmetic A-law encode (ITU-T G.711 §2). Same result as
+/// [`encode_sample`] but computed from the formula every call instead of
+/// loaded from [`ALAW_ENCODE`]:
 ///
 /// 1. Extract sign; work with absolute magnitude (clamped to the largest
 ///    representable A-law level = 32256).
@@ -31,42 +45,13 @@ pub fn decode_sample(byte: u8) -> i16 {
 ///    segment bit.
 /// 4. Compose S|E|M, then XOR with 0x55 for the on-wire alternate-bit
 ///    inversion.
+///
+/// Kept public so callers that legitimately do not want the 64 KiB
+/// static LUT linked into their binary, or a test that wants a second
+/// source of truth, can reach the spec formula directly.
 #[inline]
-pub fn encode_sample(sample: i16) -> u8 {
-    let mut mag: i32 = sample as i32;
-    // A-law sign convention: bit 7 set ⇒ positive, clear ⇒ negative.
-    let sign_bit: u8 = if mag < 0 { 0x00 } else { 0x80 };
-    if mag < 0 {
-        // i16::MIN as i32 is -32768; -(-32768) = 32768 fits in i32.
-        mag = -mag;
-    }
-    // Largest representable A-law linear value is 32256 (segment 7,
-    // mantissa 15). Anything above saturates.
-    if mag > 32256 {
-        mag = 32256;
-    }
-
-    let (seg, mant): (u32, u32) = if mag < 256 {
-        // Segment 0: mantissa = bits 4..7 of the magnitude.
-        (0, (mag >> 4) as u32 & 0x0F)
-    } else {
-        // Segments 1..=7: find position of topmost set bit. With mag
-        // in [256, 32256], the top bit is between position 8 and 14, so
-        // segment = top_bit_position − 7. Mantissa = bits just below
-        // the top bit.
-        let mut seg = 1u32;
-        let mut threshold: i32 = 512;
-        while seg < 7 && mag >= threshold {
-            seg += 1;
-            threshold <<= 1;
-        }
-        let shift = seg + 3; // = top_bit_pos - 4
-        let m = ((mag >> shift) & 0x0F) as u32;
-        (seg, m)
-    };
-
-    let byte = sign_bit | ((seg as u8) << 4) | (mant as u8);
-    byte ^ ALAW_XOR
+pub fn encode_sample_arith(sample: i16) -> u8 {
+    alaw_encode_arith(sample)
 }
 
 // -------------- decoder --------------
@@ -215,10 +200,14 @@ impl Encoder for AlawEncoder {
         if bytes.len() % 2 != 0 {
             return Err(Error::invalid("G.711 A-law encoder: odd byte count"));
         }
-        let mut out = Vec::with_capacity(bytes.len() / 2);
+        let n = bytes.len() / 2;
+        let mut out = Vec::with_capacity(n);
+        // Hot loop: index the compile-time ALAW_ENCODE table directly so
+        // the LLVM autovec sees a slice-load + slice-store pair with no
+        // inlining wall.
         for chunk in bytes.chunks_exact(2) {
             let s = i16::from_le_bytes([chunk[0], chunk[1]]);
-            out.push(encode_sample(s));
+            out.push(ALAW_ENCODE[s as u16 as usize]);
         }
         let mut pkt = Packet::new(0, self.time_base, out);
         pkt.pts = a.pts;

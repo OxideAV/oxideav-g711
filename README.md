@@ -75,6 +75,21 @@ structs are also publicly constructible via `mulaw::make_decoder` /
 `alaw::make_decoder` / etc. for cases where you want full control over
 construction without the registry lookup.
 
+### Encode hot path — compile-time S16 → byte LUTs
+
+`mulaw::encode_sample` and `alaw::encode_sample` index 64 KiB
+compile-time tables (`tables::MULAW_ENCODE`, `tables::ALAW_ENCODE`,
+both `[u8; 65536]`). The entries are produced by running the
+arithmetic encoders inside a `const fn` loop, so each LUT is
+**bit-exact-by-construction** relative to the spec formulas in §2 /
+§3 — a regression test (`mulaw_lut_matches_arith_for_every_sample`
+/ `alaw_lut_matches_arith_for_every_sample`) pins this equality on
+every one of the 65536 entries on every CI run. Callers that need
+the formula path without linking the table in can call
+`mulaw::encode_sample_arith` / `alaw::encode_sample_arith` instead;
+they delegate to the same `const fn` that populates the LUT, so
+the result is the same byte.
+
 ### Properties verified by the test suite
 
 - All 13 fixtures in [`docs/audio/g711/fixtures/`](../../docs/audio/g711/fixtures/)
@@ -128,16 +143,21 @@ cargo bench -p oxideav-g711 --bench streaming
 ```
 
 Per-sample LUT decode tops out around 5.5 GiB/s (µ-law and A-law
-roughly tied); per-sample arithmetic encode is ~1.5 GiB/s for µ-law
-and ~1.4 GiB/s for A-law (segment-search loop, not LUT-bound). The
-full trait-surface encode→decode round-trip lands around 1 GiB/s
-on aarch64-darwin including factory construction. The r206
+roughly tied). Encode now runs through the **r230** compile-time
+S16 → byte LUTs (`MULAW_ENCODE` / `ALAW_ENCODE`, 64 KiB each) — the
+per-sample inner loop hits **≈ 10.9 GiB/s** for both laws (vs. the
+~1.5 GiB/s the pre-r230 arithmetic segment-search loop measured on
+the same host). The matching `encode_sample_arith` helpers still
+ship the formula path for callers that want the spec mechanics
+without the table linked in. The full trait-surface encode→decode
+round-trip jumps from ~1 GiB/s to **≈ 2.1 GiB/s** on
+aarch64-darwin including factory construction. The r206
 **streaming** bench amortises construction across a 50-frame PSTN
-20 ms burst and tops out around 760–985 MiB/s end-to-end depending
-on channel count + rate (the per-frame trait-surface overhead is
-what shows up once factory cost is amortised). Run them again
-after any change to the encode segment search, the inner LUT
-load, or the encoder/decoder queue management to spot regressions.
+20 ms burst and now lands at **1.05–2.10 GiB/s** end-to-end across
+the same five scenarios (was 760–985 MiB/s pre-r230). Run the
+benches again after any change to the LUT generators, the inner
+slice load, or the encoder/decoder queue management to spot
+regressions.
 
 ## Fuzzing
 

@@ -226,3 +226,33 @@ fn alaw_decode_encode_is_identity_for_every_byte() {
         );
     }
 }
+
+/// LUT-vs-arith equivalence pin (r230). The compile-time
+/// `MULAW_ENCODE` LUT is built by invoking the arithmetic
+/// `mulaw_encode_arith` at every S16 value inside a `const fn` loop,
+/// so it is bit-exact-by-construction. We assert that here for every
+/// one of the 65536 entries — any future tweak that lets the LUT
+/// drift from the formula (or vice versa) fails CI on the spot.
+#[test]
+fn mulaw_lut_matches_arith_for_every_sample() {
+    for x in i16::MIN..=i16::MAX {
+        let lut = oxideav_g711::mulaw::encode_sample(x);
+        let arith = oxideav_g711::mulaw::encode_sample_arith(x);
+        assert_eq!(
+            lut, arith,
+            "µ-law LUT/arith mismatch at sample {x}: lut={lut:#04x} arith={arith:#04x}"
+        );
+    }
+}
+
+#[test]
+fn alaw_lut_matches_arith_for_every_sample() {
+    for x in i16::MIN..=i16::MAX {
+        let lut = oxideav_g711::alaw::encode_sample(x);
+        let arith = oxideav_g711::alaw::encode_sample_arith(x);
+        assert_eq!(
+            lut, arith,
+            "A-law LUT/arith mismatch at sample {x}: lut={lut:#04x} arith={arith:#04x}"
+        );
+    }
+}

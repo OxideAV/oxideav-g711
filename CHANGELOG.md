@@ -9,6 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- perf: compile-time 64 KiB S16 → byte encode LUT for both laws
+  (r230). `mulaw::encode_sample` and `alaw::encode_sample` now
+  index `MULAW_ENCODE` / `ALAW_ENCODE` (`[u8; 65536]` each, 64 KiB
+  per law, 128 KiB total static data) instead of running the per-call
+  bias-add + segment-search + mantissa-shift + on-wire-inversion
+  formula. Each LUT entry is produced at compile time by the
+  arithmetic encoder (`tables::mulaw_encode_arith` /
+  `alaw_encode_arith` — both `const fn`) so the tables are
+  bit-exact-by-construction relative to the ITU-T G.711 §2 / §3
+  formulas: no second source of truth, no risk of LUT drift, the
+  existing `*_encode_is_bit_exact_for_all_65536_samples` exhaustive
+  tests stay green. The pre-r230 arithmetic helpers stay public as
+  `mulaw::encode_sample_arith` / `alaw::encode_sample_arith` for
+  callers that legitimately don't want the 64 KiB table linked into
+  their binary (e.g. wasm size-sensitive consumers, or a second
+  source of truth in a test). A new pair of exhaustive
+  `*_lut_matches_arith_for_every_sample` tests pins
+  `LUT[s] == arith(s)` for every one of the 65536 entries on every
+  CI run — any future tweak that lets table and formula drift fails
+  immediately. The matching r173 `encode` Criterion bench gains two
+  new rows (`encode_mulaw_lut_8k_1s`, `encode_alaw_lut_8k_1s`)
+  alongside the renamed `arith` rows so the A/B is one bench
+  invocation away. Measured on aarch64-darwin (release, 3 s
+  Criterion measurement window): per-sample inner loop jumps from
+  **µ-law 1.50 GiB/s → 10.85 GiB/s (7.2×)** and **A-law
+  1.39 GiB/s → 10.90 GiB/s (7.8×)**. The trait-surface encoder hot
+  loops in `mulaw.rs` / `alaw.rs` index the slice directly inside
+  `chunks_exact(2)` to let the codegen merge the LE byte unpack +
+  table load + push without an inline wall. End-to-end deltas: the
+  r173 `roundtrip` bench (factory + encode + decode + one frame)
+  now lands at **≈ 2.1 GiB/s** across all four scenarios (was
+  ~1 GiB/s pre-r230 — ≈ 2×). The r206 `streaming` bench (one pair
+  reused across a 50-frame PSTN burst) lands at
+  **1.05–2.10 GiB/s** across the five scenarios (was
+  760–985 MiB/s, ≈ 2×). Per the round-selection memory's "ONE of
+  fuzz / bench / profile per round" rule for saturated codecs, this
+  is the **bench** pick — the LUT swap was already flagged as
+  future work by the r173 bench-file header comment ("Future
+  optimisation rounds may [...] drop in a 64 KiB direct S16 → byte
+  LUT"), and the win is large enough to want a permanent A/B
+  baseline rather than a one-shot measurement. No public-API
+  break: the `encode_sample` signature is unchanged; only its
+  internals moved from formula to table. The arithmetic path is
+  still reachable under a new public name.
 - fuzz: new `factory_params` target (r224) — fifth libFuzzer harness
   exercising the parameter-validation surface across all four
   `make_decoder` / `make_encoder` entry points (µ-law + A-law,

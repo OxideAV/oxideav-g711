@@ -9,52 +9,48 @@ use oxideav_core::{
 use oxideav_core::{Decoder, Encoder};
 use std::collections::VecDeque;
 
-use crate::tables::{MULAW_BIAS, MULAW_DECODE};
+use crate::tables::{mulaw_encode_arith, MULAW_DECODE, MULAW_ENCODE};
 
-/// Decode one µ-law byte to a linear S16 sample. Direct LUT lookup.
+/// Decode one µ-law byte to a linear S16 sample. Direct LUT lookup
+/// against [`MULAW_DECODE`].
 #[inline]
 pub fn decode_sample(byte: u8) -> i16 {
     MULAW_DECODE[byte as usize]
 }
 
-/// Encode one S16 sample as a µ-law byte (ITU-T G.711 §3, arithmetic form).
+/// Encode one S16 sample as a µ-law byte (ITU-T G.711 §3). Direct LUT
+/// lookup against [`MULAW_ENCODE`] — every entry in that table was
+/// produced at compile time by [`encode_sample_arith`] (the arithmetic
+/// implementation of §3.2), so the table is bit-exact-by-construction
+/// relative to the spec formula and the runtime hot path is a single
+/// 64 KiB-LUT load instead of bias + segment search + mantissa shift +
+/// on-wire inversion.
 ///
-/// Algorithm:
+/// If you want the formula instead of the table — e.g. to assert
+/// equality with the LUT in a test — call [`encode_sample_arith`].
+#[inline]
+pub fn encode_sample(sample: i16) -> u8 {
+    MULAW_ENCODE[sample as u16 as usize]
+}
+
+/// Arithmetic µ-law encode (ITU-T G.711 §3.2). Same result as
+/// [`encode_sample`] but computed from the formula every call instead of
+/// loaded from [`MULAW_ENCODE`]:
+///
 /// 1. Extract sign; work with absolute magnitude clamped to 0..=32635 (the
 ///    largest µ-law-representable amplitude after bias).
 /// 2. Add the bias (132).
 /// 3. Find the segment (0..=7) as `exp = position_of_highest_set_bit - 7`.
 /// 4. The 4-bit mantissa is the next four bits below the segment bit.
 /// 5. Compose S|E|M, then complement every bit for the on-wire encoding.
+///
+/// Kept public so callers that legitimately do not want the 64 KiB
+/// static LUT linked into their binary (e.g. wasm size-sensitive
+/// callers, or a test that wants a second source of truth) can still
+/// reach the spec formula directly.
 #[inline]
-pub fn encode_sample(sample: i16) -> u8 {
-    // Clip to µ-law range to avoid overflow of (abs + bias).
-    let mut mag: i32 = sample as i32;
-    let sign_bit: u8 = if mag < 0 { 0x80 } else { 0 };
-    if mag < 0 {
-        mag = -mag;
-    }
-    // Clamp. Values at or above 32635 all collapse into the topmost code.
-    if mag > 32635 {
-        mag = 32635;
-    }
-    mag += MULAW_BIAS;
-
-    // Find segment: position of the topmost set bit minus 7.
-    // Since (mag + bias) fits in 15 bits with max ~32767, the topmost bit
-    // is at most 14.
-    let mut seg: u32 = 7;
-    let mut mask: i32 = 0x4000;
-    while seg > 0 && (mag & mask) == 0 {
-        seg -= 1;
-        mask >>= 1;
-    }
-
-    // Mantissa: the four bits immediately below the segment's top bit.
-    let mantissa = ((mag >> (seg + 3)) & 0x0F) as u8;
-    let byte = sign_bit | ((seg as u8) << 4) | mantissa;
-    // Invert on-wire.
-    !byte
+pub fn encode_sample_arith(sample: i16) -> u8 {
+    mulaw_encode_arith(sample)
 }
 
 // -------------- decoder --------------
@@ -204,10 +200,14 @@ impl Encoder for UlawEncoder {
         if bytes.len() % 2 != 0 {
             return Err(Error::invalid("G.711 µ-law encoder: odd byte count"));
         }
-        let mut out = Vec::with_capacity(bytes.len() / 2);
+        let n = bytes.len() / 2;
+        let mut out = Vec::with_capacity(n);
+        // Hot loop: index the compile-time MULAW_ENCODE table directly
+        // rather than going through `encode_sample` so the LLVM autovec
+        // sees a slice-load + slice-store pair with no inlining wall.
         for chunk in bytes.chunks_exact(2) {
             let s = i16::from_le_bytes([chunk[0], chunk[1]]);
-            out.push(encode_sample(s));
+            out.push(MULAW_ENCODE[s as u16 as usize]);
         }
         let mut pkt = Packet::new(0, self.time_base, out);
         pkt.pts = a.pts;

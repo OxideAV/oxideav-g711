@@ -1,13 +1,14 @@
 //! Criterion benchmarks for the G.711 encoder hot paths.
 //!
 //! Round 173 (depth-mode benchmarks): companion to `benches/decode.rs`.
-//! G.711 encoding is the more interesting half of the codec from a
-//! perf standpoint because, unlike decode (a 256-entry LUT load), it
-//! is implemented arithmetically — sign extraction, bias addition,
-//! segment search via a top-bit-position loop, mantissa shift, on-
-//! wire inversion. Future optimisation rounds may replace the segment
-//! loop with `leading_zeros`, drop in a 64 KiB direct S16 → byte LUT,
-//! or SIMD-batch the conversion. These benches give them a baseline.
+//! Round 230 added a compile-time 64 KiB direct S16 → byte LUT for
+//! both laws ([`oxideav_g711::mulaw::encode_sample`] now indexes
+//! `MULAW_ENCODE`; [`encode_sample_arith`] still ships the
+//! formula). The `arith` rows here keep the segment-search-loop
+//! baseline so future optimisation rounds (e.g. SIMD-batched LUT
+//! gather, or a 2× 32 KiB sign-folded LUT, or a runtime-feature-gated
+//! `leading_zeros` arith path) can A/B against both the formula and
+//! the table without removing either side.
 //!
 //! Each scenario is self-contained: every S16 input is synthesised
 //! in-bench from a deterministic xorshift seed so we exercise every
@@ -18,16 +19,24 @@
 //!
 //!   - **encode_mulaw_arith_8k_1s**: 1 second of synthesised S16 PCM
 //!     at 8 kHz mono, encoded one sample at a time via the per-sample
-//!     [`oxideav_g711::mulaw::encode_sample`] helper — the fastest
-//!     available path; baseline for any future LUT or SIMD swap.
+//!     [`oxideav_g711::mulaw::encode_sample_arith`] formula path —
+//!     the pre-r230 baseline; kept so optimisation rounds can A/B
+//!     against the table.
 //!   - **encode_alaw_arith_8k_1s**: same shape, A-law variant. A-law
 //!     has a slightly different segment search shape (no bias add,
 //!     explicit segment 0 short-circuit) so its cost can drift
 //!     independently of µ-law.
+//!   - **encode_mulaw_lut_8k_1s** (r230): same input as the µ-law
+//!     `arith` row but encoded via the 64 KiB compile-time
+//!     `MULAW_ENCODE` LUT — the current per-sample hot path.
+//!   - **encode_alaw_lut_8k_1s** (r230): same input as the A-law
+//!     `arith` row but via `ALAW_ENCODE` — the LUT win is larger on
+//!     A-law because the arith path has an extra branch
+//!     (segment-0 fast-path), so the table closes more of that gap.
 //!   - **encode_mulaw_encoder_mono_8k_1s**: 1 second mono through the
 //!     trait-surface [`oxideav_core::Encoder`] — adds packet framing,
 //!     LE-byte unpacking, output queue management on top of the
-//!     arithmetic conversion.
+//!     per-sample LUT load (post-r230).
 //!   - **encode_alaw_encoder_stereo_8k_1s**: 1 second stereo A-law
 //!     through the trait surface — same overhead breakdown but on
 //!     twice the byte count.
@@ -85,7 +94,7 @@ fn bench_encode_mulaw_arith_8k_1s(c: &mut Criterion) {
             let src = criterion::black_box(&pcm);
             let mut acc: u32 = 0;
             for &s in src {
-                acc = acc.wrapping_add(mulaw::encode_sample(s) as u32);
+                acc = acc.wrapping_add(mulaw::encode_sample_arith(s) as u32);
             }
             criterion::black_box(acc)
         });
@@ -99,6 +108,46 @@ fn bench_encode_alaw_arith_8k_1s(c: &mut Criterion) {
     let mut g = c.benchmark_group("encode_alaw_arith_8k_1s");
     g.throughput(Throughput::Bytes((n * 2) as u64));
     g.bench_function(BenchmarkId::from_parameter("alaw/arith/8k/1s"), |b| {
+        b.iter(|| {
+            let src = criterion::black_box(&pcm);
+            let mut acc: u32 = 0;
+            for &s in src {
+                acc = acc.wrapping_add(alaw::encode_sample_arith(s) as u32);
+            }
+            criterion::black_box(acc)
+        });
+    });
+    g.finish();
+}
+
+/// r230 — per-sample LUT path (the steady-state hot path post-r230).
+/// Same input distribution as the matching `arith` row so a direct
+/// throughput ratio measures the win from replacing segment search
+/// with a single 64 KiB LUT load.
+fn bench_encode_mulaw_lut_8k_1s(c: &mut Criterion) {
+    let n = 8_000;
+    let pcm = build_pcm(n, 0xC0DE_BABE);
+    let mut g = c.benchmark_group("encode_mulaw_lut_8k_1s");
+    g.throughput(Throughput::Bytes((n * 2) as u64));
+    g.bench_function(BenchmarkId::from_parameter("mulaw/lut/8k/1s"), |b| {
+        b.iter(|| {
+            let src = criterion::black_box(&pcm);
+            let mut acc: u32 = 0;
+            for &s in src {
+                acc = acc.wrapping_add(mulaw::encode_sample(s) as u32);
+            }
+            criterion::black_box(acc)
+        });
+    });
+    g.finish();
+}
+
+fn bench_encode_alaw_lut_8k_1s(c: &mut Criterion) {
+    let n = 8_000;
+    let pcm = build_pcm(n, 0xC001_D00D);
+    let mut g = c.benchmark_group("encode_alaw_lut_8k_1s");
+    g.throughput(Throughput::Bytes((n * 2) as u64));
+    g.bench_function(BenchmarkId::from_parameter("alaw/lut/8k/1s"), |b| {
         b.iter(|| {
             let src = criterion::black_box(&pcm);
             let mut acc: u32 = 0;
@@ -203,6 +252,8 @@ criterion_group!(
     benches,
     bench_encode_mulaw_arith_8k_1s,
     bench_encode_alaw_arith_8k_1s,
+    bench_encode_mulaw_lut_8k_1s,
+    bench_encode_alaw_lut_8k_1s,
     bench_encode_mulaw_encoder_mono_8k_1s,
     bench_encode_alaw_encoder_stereo_8k_1s,
     bench_encode_mulaw_encoder_8ch_48k_250ms,
