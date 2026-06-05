@@ -122,10 +122,18 @@ impl Decoder for UlawDecoder {
             )));
         }
         let samples_per_channel = pkt.data.len() / ch;
-        let mut out = Vec::with_capacity(pkt.data.len() * 2);
-        for &b in &pkt.data {
-            let s = decode_sample(b);
-            out.extend_from_slice(&s.to_le_bytes());
+        // r236 hot loop: pre-size the output and zip the input bytes
+        // against `chunks_exact_mut(2)` over the destination so each
+        // step is a single LUT load + two adjacent stores. Replaces the
+        // pre-r236 `Vec::extend_from_slice(&s.to_le_bytes())` per-iter
+        // 2-byte temporary that prevented LLVM from lifting the loop
+        // into wider stores on aarch64.
+        let mut out = vec![0u8; pkt.data.len() * 2];
+        for (&b, dst) in pkt.data.iter().zip(out.chunks_exact_mut(2)) {
+            let s = MULAW_DECODE[b as usize];
+            let le = s.to_le_bytes();
+            dst[0] = le[0];
+            dst[1] = le[1];
         }
         Ok(Frame::Audio(AudioFrame {
             samples: samples_per_channel as u32,
@@ -201,13 +209,17 @@ impl Encoder for UlawEncoder {
             return Err(Error::invalid("G.711 µ-law encoder: odd byte count"));
         }
         let n = bytes.len() / 2;
-        let mut out = Vec::with_capacity(n);
-        // Hot loop: index the compile-time MULAW_ENCODE table directly
-        // rather than going through `encode_sample` so the LLVM autovec
-        // sees a slice-load + slice-store pair with no inlining wall.
-        for chunk in bytes.chunks_exact(2) {
-            let s = i16::from_le_bytes([chunk[0], chunk[1]]);
-            out.push(MULAW_ENCODE[s as u16 as usize]);
+        // r236 hot loop: pre-size the output, then zip the LE-S16 source
+        // pairs with `chunks_exact_mut(1)` over the destination so the
+        // codegen sees a direct slice-load + slice-store pair without
+        // a `Vec::push` bounds-check chain. `chunks_exact(2)` on the
+        // source still hands us the two LE halves; the trailing
+        // `chunks_exact(2).remainder()` is empty because `bytes.len()
+        // % 2 == 0` was just validated above.
+        let mut out = vec![0u8; n];
+        for (src, dst) in bytes.chunks_exact(2).zip(out.iter_mut()) {
+            let s = i16::from_le_bytes([src[0], src[1]]);
+            *dst = MULAW_ENCODE[s as u16 as usize];
         }
         let mut pkt = Packet::new(0, self.time_base, out);
         pkt.pts = a.pts;

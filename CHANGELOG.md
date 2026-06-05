@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- perf: indexed-write trait-surface hot loops in `mulaw.rs` /
+  `alaw.rs` (r236). The four encoder + decoder framing wrappers
+  previously built their output `Vec<u8>` via `Vec::push` (encode)
+  / `Vec::extend_from_slice(&s.to_le_bytes())` (decode), one entry
+  at a time, inside a `chunks_exact(2)` / `pkt.data.iter()` loop.
+  Switched to pre-size the destination (`vec![0u8; n]` /
+  `vec![0u8; pkt.data.len() * 2]`) and zip the source against
+  `iter_mut()` (encode) / `chunks_exact_mut(2)` (decode) — every
+  step becomes a single LUT load + 1 or 2 adjacent indexed stores
+  with no bounds-check chain or 2-byte temporary, so LLVM lifts
+  the loop into wider stores on aarch64. No public-API change, no
+  spec-relevant logic change (the LUTs themselves are unchanged
+  from r230, the per-sample helpers are unchanged), no algorithmic
+  change — purely a codegen-friendly restructure of how the result
+  buffer is filled. Measured on aarch64-darwin (release, 3 s
+  Criterion measurement window): the four trait-surface decode rows
+  go **2.5–2.7 GiB/s → 3.76–3.88 GiB/s (+44–51%)**, the three
+  encode rows go **3.65–3.85 GiB/s → 5.29–5.86 GiB/s (+45–55%)**,
+  the four end-to-end r173 roundtrip rows go
+  **≈ 2.1 GiB/s → 3.13–3.35 GiB/s (+49–52%)**, and the five r206
+  streaming rows go **1.05–2.10 GiB/s → 1.71–3.25 GiB/s
+  (+35–46%)**. The per-sample LUT rows are unchanged (~5.5 GiB/s
+  decode / ~11.1 GiB/s encode) — they were already a single
+  slice-load + push pair; the r236 win comes entirely from the
+  framing wrapper closing the gap to the inner loop. All 66 unit /
+  integration tests stay green on both `cargo test` and
+  `cargo test --release` (including the exhaustive
+  `bit_exact_reference` 65 536-input sweeps and the 13 `Tier::
+  BitExact` `docs_corpus` fixtures from r218) — bit-exact behaviour
+  is preserved because the loop body still computes the same byte
+  per sample, only the store pattern changes. Per the
+  round-selection memory's "ONE of fuzz / bench / profile per
+  round" rule for saturated codecs, this is the **profile-driven
+  optimisation** lane (after r230's bench-driven LUT swap and
+  r224's fuzz-driven parameter surface); the framing-wrapper gap
+  was the largest remaining headroom visible in the r173 bench
+  rows (per-sample LUT decode = 5.5 GiB/s vs. trait-surface
+  decode = 2.6 GiB/s pre-r236).
 - perf: compile-time 64 KiB S16 → byte encode LUT for both laws
   (r230). `mulaw::encode_sample` and `alaw::encode_sample` now
   index `MULAW_ENCODE` / `ALAW_ENCODE` (`[u8; 65536]` each, 64 KiB

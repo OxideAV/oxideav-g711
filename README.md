@@ -143,21 +143,45 @@ cargo bench -p oxideav-g711 --bench streaming
 ```
 
 Per-sample LUT decode tops out around 5.5 GiB/s (µ-law and A-law
-roughly tied). Encode now runs through the **r230** compile-time
+roughly tied). Encode runs through the **r230** compile-time
 S16 → byte LUTs (`MULAW_ENCODE` / `ALAW_ENCODE`, 64 KiB each) — the
-per-sample inner loop hits **≈ 10.9 GiB/s** for both laws (vs. the
+per-sample inner loop hits **≈ 11.1 GiB/s** for both laws (vs. the
 ~1.5 GiB/s the pre-r230 arithmetic segment-search loop measured on
 the same host). The matching `encode_sample_arith` helpers still
 ship the formula path for callers that want the spec mechanics
-without the table linked in. The full trait-surface encode→decode
-round-trip jumps from ~1 GiB/s to **≈ 2.1 GiB/s** on
-aarch64-darwin including factory construction. The r206
-**streaming** bench amortises construction across a 50-frame PSTN
-20 ms burst and now lands at **1.05–2.10 GiB/s** end-to-end across
-the same five scenarios (was 760–985 MiB/s pre-r230). Run the
-benches again after any change to the LUT generators, the inner
-slice load, or the encoder/decoder queue management to spot
-regressions.
+without the table linked in.
+
+**r236** reshaped the four trait-surface inner loops to pre-size
+the output `Vec<u8>` and zip the source against an `iter_mut()` /
+`chunks_exact_mut(2)` destination, replacing the pre-r236
+`Vec::push` (encode) and `Vec::extend_from_slice(&s.to_le_bytes())`
+(decode) per-iter patterns. That gives the codegen a single
+slice-load + slice-store pair per sample with no bounds-check chain
+or 2-byte temporary, so LLVM lifts the loop into wider stores on
+aarch64. Measured on aarch64-darwin (release, 3 s Criterion window):
+
+| scenario | pre-r236 | post-r236 |
+| --- | --- | --- |
+| decode trait mono 8 kHz | 2.6 GiB/s | **3.76 GiB/s** (+44%) |
+| decode trait stereo 8 kHz | 2.7 GiB/s | **3.88 GiB/s** (+44%) |
+| decode trait 8 ch / 48 kHz | 2.5 GiB/s | **3.76 GiB/s** (+51%) |
+| encode trait mono 8 kHz | 3.85 GiB/s | **5.64 GiB/s** (+47%) |
+| encode trait stereo 8 kHz | 3.65 GiB/s | **5.29 GiB/s** (+45%) |
+| encode trait 8 ch / 48 kHz | 3.79 GiB/s | **5.86 GiB/s** (+55%) |
+| roundtrip mulaw mono 8 kHz | 2.1 GiB/s | **3.13 GiB/s** (+49%) |
+| roundtrip alaw 8 ch / 48 kHz | 2.2 GiB/s | **3.35 GiB/s** (+52%) |
+| streaming alaw 8 ch / 48 kHz | 2.22 GiB/s | **3.25 GiB/s** (+46%) |
+
+The per-sample LUT rows are unchanged (~5.5 GiB/s decode /
+~11.1 GiB/s encode) — they were already a single slice-load + push
+pair; the r236 win comes entirely from the framing-wrapper code
+moving from `push` / `extend_from_slice` to indexed writes against
+a pre-sized buffer. The r206 **streaming** bench (one encoder +
+decoder pair across a 50-frame PSTN 20 ms burst) now lands at
+**1.71–3.25 GiB/s** end-to-end across the five scenarios (was
+1.05–2.10 GiB/s pre-r236, +35–46%). Run the benches again after
+any change to the LUT generators, the inner slice load, or the
+encoder/decoder queue management to spot regressions.
 
 ## Fuzzing
 
