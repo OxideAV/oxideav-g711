@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- benches: new `voice` harness (r247) — fifth Criterion bench file
+  driving the same per-sample LUT + arith + roundtrip hot paths
+  the r173 / r206 benches cover, but feeding them from a closed-
+  form Laplacian generator concentrated near zero instead of the
+  existing uniform-random xorshift32 stream. Eight scenarios:
+  decode + encode × LUT + arith × law (six rows), plus a mono 1 s
+  roundtrip per law (two rows). The Laplacian-centred distribution
+  models PSTN voice content — ~80% of samples land in segments
+  0..=2 (|s| ≤ 1024) — so the encode 64 KiB LUT touches primarily
+  its low-magnitude quadrants and the arith path hits the
+  segment-0 fast exit on the same 80%. Per the round-selection
+  memory's "ONE of fuzz / bench / profile per round" rule for
+  saturated codecs, this is the **bench** lane — complementing
+  r230's bench-driven LUT swap (also bench lane) and r224's fuzz
+  lane / r236's profile lane. Measured on aarch64-darwin (release,
+  2 s window): the voice-distribution rows land within a few
+  percent of their uniform counterparts (decode LUT
+  ≈ 5.5 GiB/s both laws; encode LUT µ-law ≈ 9.5 GiB/s / A-law
+  ≈ 10.9 GiB/s; encode arith µ-law ≈ 1.49 GiB/s / A-law ≈
+  1.72 GiB/s; roundtrip mono 8 kHz ≈ 3.1–3.3 GiB/s) — that's
+  itself a useful finding (the LUTs are cache-line dense enough
+  that input-distribution locality does not dominate per-sample
+  wall time on this host), and it gives future tweaks a permanent
+  A/B baseline so any change that introduces a meaningful spread
+  between the two distributions is caught immediately. No public-
+  API change. The bench file is self-contained — every input is
+  synthesised in-bench from a deterministic seed; no `docs/`
+  fixtures, no audio corpora, no probability-distribution crates.
+  All 66 existing tests stay green; clippy + rustfmt clean.
 - perf: indexed-write trait-surface hot loops in `mulaw.rs` /
   `alaw.rs` (r236). The four encoder + decoder framing wrappers
   previously built their output `Vec<u8>` via `Vec::push` (encode)

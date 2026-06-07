@@ -57,6 +57,24 @@ harness = false
 name = "streaming"
 harness = false
 
+# Round 247 (depth-mode benchmarks, voice-distribution follow-up to
+# r173 / r206): the existing four bench files all feed the per-sample
+# math from a uniform-random xorshift32 stream, which exercises every
+# segment of the companding curve equally but does not match the
+# strongly-near-zero amplitude distribution a real PSTN session
+# carries. This file adds eight rows (decode + encode × LUT + arith
+# × law, plus a mono 1 s roundtrip per law) driven by a closed-form
+# Laplacian generator so the encode LUT touches primarily the small-
+# magnitude half of `MULAW_ENCODE` / `ALAW_ENCODE` and the decode
+# LUT sees the codeword distribution voice content actually produces.
+# Catches input-distribution-sensitive regressions (cache locality,
+# segment-search branch profile) that the uniform-random rows do
+# not. Same `cargo bench -p oxideav-g711 --bench voice` shape as the
+# other benches.
+[[bench]]
+name = "voice"
+harness = false
+
 # Round 189 (depth-mode profiling): flat measure-this-thing driver
 # for `samply` / `cargo flamegraph` / `perf record`. Mirrors the
 # `benches/{decode,encode,roundtrip}.rs` scenarios byte-for-byte so

@@ -140,7 +140,27 @@ cargo bench -p oxideav-g711 --bench decode
 cargo bench -p oxideav-g711 --bench encode
 cargo bench -p oxideav-g711 --bench roundtrip
 cargo bench -p oxideav-g711 --bench streaming
+cargo bench -p oxideav-g711 --bench voice
 ```
+
+The first four use a uniform-random xorshift32 input distribution
+(every segment of the curve sees equal traffic — the canonical
+worst-case for cache-pressure regressions). **r247** added a fifth
+bench, `voice`, that drives the same per-sample + trait-surface
+hot paths from a closed-form Laplacian generator concentrated near
+zero — ~80% of samples land in segments 0..=2 (|s| ≤ 1024), so the
+encode 64 KiB LUT touches primarily its low-magnitude quadrants
+and the segment-search arith path hits the segment-0 fast exit on
+the same 80%. Measured on aarch64-darwin (release, 2 s window):
+the voice-distribution rows land within a few percent of their
+uniform counterparts (decode LUT ≈ 5.5 GiB/s both laws; encode
+LUT µ-law ≈ 9.5 GiB/s / A-law ≈ 10.9 GiB/s; encode arith µ-law ≈
+1.49 GiB/s / A-law ≈ 1.72 GiB/s; roundtrip mono 8 kHz ≈
+3.1–3.3 GiB/s), confirming the LUT is cache-line dense enough that
+input-distribution locality does not dominate per-sample wall
+time. A future regression that splits a hot cache line — e.g. a
+SIMD gather that pulls non-contiguous entries — would show up
+disproportionately on the voice rows.
 
 Per-sample LUT decode tops out around 5.5 GiB/s (µ-law and A-law
 roughly tied). Encode runs through the **r230** compile-time
