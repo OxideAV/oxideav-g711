@@ -21,7 +21,7 @@ cargo-fuzz = true
 # is where panics, integer overflows, or attacker-driven
 # allocations could plausibly hide.
 #
-# Five targets cover the five risk shapes:
+# Six targets cover the six risk shapes:
 #
 # - **`decode_pipeline`**: arbitrary bytes through both
 #   `mulaw::UlawDecoder` and `alaw::AlawDecoder` at attacker-chosen
@@ -68,6 +68,20 @@ cargo-fuzz = true
 #   with a small attacker payload to confirm the produced trait
 #   object survives one send / receive / flush cycle without
 #   panicking.
+# - **`cross_law_transcode`** (r262): cross-law PSTN-gateway
+#   transcoding lifecycle — decode incoming bytes under one law,
+#   re-encode the recovered PCM as the *other* law, then optionally
+#   decode + re-encode in reverse for the full A↔µ↔A roundtrip.
+#   The first five targets all stay within one law per pipeline;
+#   this target is the first to assert that **two different-law
+#   trait objects compose correctly through the trait surface** at
+#   the byte level. The cross-law output must equal
+#   `encode_B(decode_A(b))` applied byte-by-byte to every input
+#   byte (and the reverse must equal the analogous double-transcode
+#   per-sample baseline) — any framing-level reorder, padded
+#   sample, or future per-frame state addition that coupled
+#   adjacent samples surfaces as a divergent byte on the very
+#   first transcoded position.
 [dependencies]
 libfuzzer-sys = "0.4"
 oxideav-core = "0.1"
@@ -114,5 +128,11 @@ doc = false
 [[bin]]
 name = "factory_params"
 path = "fuzz_targets/factory_params.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "cross_law_transcode"
+path = "fuzz_targets/cross_law_transcode.rs"
 test = false
 doc = false

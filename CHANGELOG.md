@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- fuzz: new `cross_law_transcode` target (r262) — sixth libFuzzer
+  harness in `fuzz/fuzz_targets/`, the first that crosses the
+  µ-law ↔ A-law boundary inside a single pipeline. Decodes the
+  attacker's input bytes under one law via the trait-surface
+  decoder, re-encodes the recovered PCM as the *other* law via
+  the trait-surface encoder, and (optionally, behind a seed bit)
+  drives the full law-A → law-B → law-A reverse roundtrip. The
+  forward output is asserted byte-for-byte against the
+  per-sample baseline `encode_other(decode_self(b))` applied to
+  every input byte, and the reverse roundtrip is asserted
+  byte-for-byte against the analogous double-transcode per-sample
+  reference path. This is the canonical PSTN-gateway transcoding
+  contract (North-American µ-law ↔ European A-law circuit
+  interconnects must transcode every sample at the boundary);
+  the five existing fuzz targets all stay within one law per
+  pipeline so the trait-surface composition of two different-law
+  factory objects was previously unfuzzed. Per the
+  round-selection memory's "ONE of fuzz / bench / profile per
+  round" rule for saturated codecs, this is the **fuzz** lane
+  (last fuzz round was r224's `factory_params`; r247 was bench,
+  r236 was profile). Measured on aarch64-darwin (release, 30 s
+  window): **2 594 496 iterations / 31 s clean** (≈ 83.7 k
+  exec/s, 452 cov / 1107 ft saturation across 52 corpus entries,
+  zero crashes / panics / divergences). No public-API change.
+  All 66 existing tests stay green; clippy + rustfmt clean on
+  both the crate and the fuzz package. The new target hardens
+  the framing-wrapper composition contract: if a future change
+  to either decoder's `receive_frame` ever invents / drops a
+  sample, or if a future per-frame state addition (an internal
+  smoother, a dither generator, a context-dependent quantiser)
+  ever coupled adjacent samples through some non-existent state,
+  the very first divergent byte fails the assert.
 - benches: new `voice` harness (r247) — fifth Criterion bench file
   driving the same per-sample LUT + arith + roundtrip hot paths
   the r173 / r206 benches cover, but feeding them from a closed-

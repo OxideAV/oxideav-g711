@@ -205,12 +205,13 @@ encoder/decoder queue management to spot regressions.
 
 ## Fuzzing
 
-A libFuzzer-driven [`fuzz/`](fuzz/) package ships five targets that
-exercise the framing wrapper, the parameter-validation surface, and
-per-sample invariants as panic- / UB-freedom contracts. The exhaustive
-bit-exact reference test already pins every encode and decode codepoint
-individually; the fuzzer's job is to drive **the trait-surface wrapper**
-at attacker-chosen channel counts, packet shapes, and sample rates,
+A libFuzzer-driven [`fuzz/`](fuzz/) package ships six targets that
+exercise the framing wrapper, the parameter-validation surface,
+per-sample invariants, and the cross-law transcoding lifecycle as
+panic- / UB-freedom contracts. The exhaustive bit-exact reference
+test already pins every encode and decode codepoint individually;
+the fuzzer's job is to drive **the trait-surface wrapper** at
+attacker-chosen channel counts, packet shapes, and sample rates,
 plus the per-sample helpers across (i16 sample, u8 codeword, law)
 triples the unit tests do not directly hammer.
 
@@ -246,6 +247,20 @@ triples the unit tests do not directly hammer.
   are exercised with a small attacker payload to confirm the
   produced trait object survives one send / receive / flush cycle
   cleanly.
+- `cross_law_transcode` (r262) — cross-law PSTN-gateway
+  transcoding lifecycle: decode incoming bytes under one law,
+  re-encode the recovered PCM as the *other* law, then optionally
+  decode + re-encode in reverse for the full A↔µ↔A roundtrip. The
+  first five targets all stay within one law per pipeline; this
+  target is the first to assert that **two different-law trait
+  objects compose correctly through the trait surface** at the byte
+  level. The cross-law output must equal
+  `encode_B(decode_A(b))` applied byte-by-byte to every input byte
+  (and the reverse must equal the analogous double-transcode
+  per-sample baseline) — any framing-level reorder, padded sample,
+  or future per-frame state addition that coupled adjacent samples
+  surfaces as a divergent byte on the very first transcoded
+  position.
 
 ```sh
 cargo +nightly fuzz run decode_pipeline
@@ -253,6 +268,7 @@ cargo +nightly fuzz run encode_pipeline
 cargo +nightly fuzz run per_sample_invariants
 cargo +nightly fuzz run streaming_pipeline
 cargo +nightly fuzz run factory_params
+cargo +nightly fuzz run cross_law_transcode
 ```
 
 Requires the [`cargo-fuzz`](https://github.com/rust-fuzz/cargo-fuzz)
@@ -263,7 +279,10 @@ target cleared **7 066 742 iterations / 60 s clean** on the same
 host (≈ 115 k exec/s, 433 cov / 1563 ft saturation); the r224
 `factory_params` target cleared **18 096 276 iterations / 60 s
 clean** on the same host (≈ 297 k exec/s, 399 cov / 628 ft
-saturation across 160 corpus entries). Corpus and crash artifacts
+saturation across 160 corpus entries); the r262
+`cross_law_transcode` target cleared **2 594 496 iterations / 31 s
+clean** on the same host (≈ 83.7 k exec/s, 452 cov / 1107 ft
+saturation across 52 corpus entries). Corpus and crash artifacts
 live under `fuzz/` and are `.gitignore`d.
 
 ## Profiling
