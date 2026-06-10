@@ -116,6 +116,16 @@ the result is the same byte.
   the whole S16 range.
 - Multichannel round-trip (1, 2, 6, 8 channels) through the trait
   surface returns the same per-sample quantisation as direct calls.
+- **Cross-law (µ ↔ A) transcode** (r270): the PSTN-gateway pipeline —
+  decode incoming bytes under one law via the trait surface, re-encode
+  the recovered PCM as the *other* law via the trait surface — equals
+  the per-sample baseline `encode_B(decode_A(b))` byte-for-byte for all
+  256 codewords in both directions, across 1 / 2 / 6 / 8 interleaved
+  channels. The full A → B → A reverse roundtrip matches the per-sample
+  double-transcode baseline, and a tandem double-hop (µ → A → µ → A → µ)
+  is byte-idempotent from the second hop on. These are CI-gated on every
+  test run, complementing the nightly-only `cross_law_transcode`
+  libFuzzer target which was previously the sole µ ↔ A boundary coverage.
 - **Per-sample quantization bound**: every S16 input round-trips
   within the spec-derived per-segment step bound (full sweep gated on
   `cfg(not(debug_assertions))` so `cargo test --release` exercises all

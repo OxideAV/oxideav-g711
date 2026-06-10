@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- tests: new `tests/cross_law_transcode.rs` integration suite (r270) —
+  pins the µ-law ↔ A-law (PSTN-gateway) transcode contract through the
+  trait surface as a deterministic, **always-CI-gated** regression. The
+  r262 `cross_law_transcode` libFuzzer target was previously the *only*
+  coverage that crossed the µ ↔ A boundary, and it runs solely under
+  `cargo +nightly fuzz run` — never on the standard CI test job. The six
+  new tests assert the same composition contract on every CI run: the
+  trait-surface forward transcode (decode law A → re-encode law B) equals
+  the per-sample baseline `encode_B(decode_A(b))` byte-for-byte across all
+  256 codewords in both directions and across 1 / 2 / 6 / 8 interleaved
+  channels (interleave independence); the full A → B → A reverse roundtrip
+  matches the per-sample double-transcode baseline
+  `encode_A(decode_B(encode_B(decode_A(b))))` byte-for-byte; and a tandem
+  double-hop (µ → A → µ → A → µ) is byte-idempotent from the second hop on
+  (PSTN tandem connections must not accumulate per-hop drift past the first
+  round-trip). The oracle is the per-sample `decode_sample` /
+  `encode_sample` helpers, themselves pinned bit-exact against the ITU-T
+  G.711 §2 (A-law) / §3 (µ-law) reference formulas by the exhaustive
+  `bit_exact_reference` sweeps, so anchoring the trait-surface transcode to
+  them transitively anchors it to the spec. If a future change to either
+  decoder's `receive_frame` ever invents / drops a sample, or a per-frame
+  state addition (an internal smoother, dither generator, or
+  context-dependent quantiser) ever coupled adjacent samples through some
+  non-existent state, these tests fail on the first divergent byte without
+  waiting for a nightly fuzz invocation. Per the round-selection memory's
+  "ONE of fuzz / bench / profile per round" rule for saturated codecs, this
+  is the **property-test** lane (r262 was fuzz, r247 bench, r236 profile).
+  No `src/` change, no public-API change; 72 tests total (66 → 72), clippy
+  + rustfmt clean.
 - fuzz: new `cross_law_transcode` target (r262) — sixth libFuzzer
   harness in `fuzz/fuzz_targets/`, the first that crosses the
   µ-law ↔ A-law boundary inside a single pipeline. Decodes the
