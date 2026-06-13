@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/OxideAV/oxideav-g711/compare/v0.0.7...v0.0.8) - 2026-06-13
+
+### Other
+
+- byte-pair LE decode LUT for trait-surface decode hot loop (r289)
+- cross-law µ ↔ A transcode contract as CI-gated integration suite (r270)
+- cross_law_transcode target — µ ↔ A trait-surface composition (r262)
+- drop release-plz.toml — use release-plz defaults across the workspace
+- voice-distribution harness (r247)
+- indexed-write trait-surface hot loops (r236)
+- compile-time 64 KiB S16 -> byte encode LUT for both laws (r230)
+- factory_params target hammering parameter-validation surface (r224)
+- promote docs_corpus fixtures from ReportOnly to BitExact (r218)
+- streaming mode in profile driver (r213)
+- streaming session harness (r206)
+
 ### Performance
 
 - perf: byte-pair little-endian decode LUT for the trait-surface decode
