@@ -65,6 +65,22 @@
 //! regression lives in the codec inner loop vs. framing overhead
 //! (packet construction, LE byte unpack, output queue management).
 //!
+//! Round 289 (depth-mode profiling) adds two store-strategy rows to
+//! the decode mode — `decode-store-recompute` and
+//! `decode-store-le-lut` — isolating just the inner store loop of
+//! `UlawDecoder` / `AlawDecoder::receive_frame` (decode each wire byte
+//! to S16, then write two little-endian PCM bytes). `recompute` is the
+//! r236 shape (`[i16; 256]` load + `i16::to_le_bytes()` per sample +
+//! two scalar stores); `le-lut` is the r289 shape now live in the
+//! crate (index a pre-serialized `[[u8; 2]; 256]` LE LUT +
+//! `copy_from_slice`). Both produce byte-identical output; on the
+//! largest working-set row (8ch/48k, 192 KB output per iter — the row
+//! where the store loop dominates) the LE-LUT store is consistently
+//! ~5-6% faster, and never slower in steady state. The LUTs are built
+//! once outside the timed region and the per-sample decode is
+//! pre-selected as a function pointer, so the only difference between
+//! the two timed loops is the store strategy itself.
+//!
 //! Round 213 (depth-mode profiling, streaming follow-up to r189):
 //! the `streaming` mode adds five extra rows that mirror the r206
 //! `benches/streaming.rs` Criterion scenarios byte-for-byte (same
@@ -270,6 +286,73 @@ fn profile_decode(iters_override: Option<u32>) {
         std::hint::black_box(sink);
         let elapsed = t.elapsed().as_secs_f64();
         print_throughput_line("decode-lut", scen.name, iters, scen.n, elapsed);
+
+        // r289 store-strategy A/B — the inner loop `UlawDecoder` /
+        // `AlawDecoder::receive_frame` runs: decode each wire byte to an
+        // S16 sample, then store it as two little-endian PCM bytes. The
+        // store can be written two ways:
+        //
+        //   recompute: load the `[i16; 256]` decode LUT, then
+        //              `i16::to_le_bytes()` per sample + two scalar
+        //              stores (the r236 shape).
+        //   le-lut:    index a pre-serialized `[[u8; 2]; 256]` LE LUT
+        //              and `copy_from_slice` the two bytes (the r289
+        //              shape now live in the crate).
+        //
+        // Both produce byte-identical output; this row quantifies the
+        // win the crate change captures. The LE LUT is reconstructed
+        // here from the public per-sample decode so the example needs
+        // no crate-internal access.
+        // Pre-select the per-sample decode as a function pointer and
+        // build both LUTs OUTSIDE the timed region, so the only
+        // difference between the two timed loops below is the store
+        // strategy itself — not a per-sample `match scen.law` branch.
+        let decode_one: fn(u8) -> i16 = match scen.law {
+            Law::Mulaw => mulaw::decode_sample,
+            Law::Alaw => alaw::decode_sample,
+        };
+        let i16_lut: [i16; 256] = {
+            let mut t = [0i16; 256];
+            for (b, e) in t.iter_mut().enumerate() {
+                *e = decode_one(b as u8);
+            }
+            t
+        };
+        let le_lut: [[u8; 2]; 256] = {
+            let mut t = [[0u8; 2]; 256];
+            for (b, e) in t.iter_mut().enumerate() {
+                *e = i16_lut[b].to_le_bytes();
+            }
+            t
+        };
+        let mut pcm_out = vec![0u8; scen.n * 2];
+
+        // recompute store — `[i16; 256]` load + `to_le_bytes()` per
+        // sample + two scalar stores (the r236 shape).
+        let t = Instant::now();
+        for _ in 0..iters {
+            let src = std::hint::black_box(&bytes);
+            for (&b, dst) in src.iter().zip(pcm_out.chunks_exact_mut(2)) {
+                let le = i16_lut[b as usize].to_le_bytes();
+                dst[0] = le[0];
+                dst[1] = le[1];
+            }
+            std::hint::black_box(&pcm_out);
+        }
+        let elapsed = t.elapsed().as_secs_f64();
+        print_throughput_line("decode-store-recompute", scen.name, iters, scen.n, elapsed);
+
+        // le-lut store
+        let t = Instant::now();
+        for _ in 0..iters {
+            let src = std::hint::black_box(&bytes);
+            for (&b, dst) in src.iter().zip(pcm_out.chunks_exact_mut(2)) {
+                dst.copy_from_slice(&le_lut[b as usize]);
+            }
+            std::hint::black_box(&pcm_out);
+        }
+        let elapsed = t.elapsed().as_secs_f64();
+        print_throughput_line("decode-store-le-lut", scen.name, iters, scen.n, elapsed);
 
         // Trait-surface Decoder — fresh factory per iter (matches the
         // bench harness; the factory is light so it does not skew the

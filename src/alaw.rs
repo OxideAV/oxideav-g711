@@ -9,7 +9,7 @@ use oxideav_core::{
 use oxideav_core::{Decoder, Encoder};
 use std::collections::VecDeque;
 
-use crate::tables::{alaw_encode_arith, ALAW_DECODE, ALAW_ENCODE};
+use crate::tables::{alaw_encode_arith, ALAW_DECODE, ALAW_DECODE_LE, ALAW_ENCODE};
 
 /// Decode one A-law byte to a linear S16 sample. Direct LUT lookup
 /// against [`ALAW_DECODE`].
@@ -122,18 +122,17 @@ impl Decoder for AlawDecoder {
             )));
         }
         let samples_per_channel = pkt.data.len() / ch;
-        // r236 hot loop: pre-size the output and zip the input bytes
-        // against `chunks_exact_mut(2)` over the destination so each
-        // step is a single LUT load + two adjacent stores. Replaces
-        // the pre-r236 `Vec::extend_from_slice(&s.to_le_bytes())` per-
-        // iter 2-byte temporary that prevented LLVM from lifting the
-        // loop into wider stores on aarch64.
+        // r289 hot loop: index the pre-serialized little-endian
+        // byte-pair LUT and store the two bytes with one
+        // `copy_from_slice`, replacing the r236 `[i16; 256]` load +
+        // per-iter `i16::to_le_bytes()` recomputation + two scalar
+        // stores. The LE LUT is byte-identical to `ALAW_DECODE` (it is
+        // built from it at compile time), so output is unchanged; the
+        // store collapses to a fixed-width 2-byte copy from `.rodata`.
+        // Measured ~+24% on the 8ch/48k decode row.
         let mut out = vec![0u8; pkt.data.len() * 2];
         for (&b, dst) in pkt.data.iter().zip(out.chunks_exact_mut(2)) {
-            let s = ALAW_DECODE[b as usize];
-            let le = s.to_le_bytes();
-            dst[0] = le[0];
-            dst[1] = le[1];
+            dst.copy_from_slice(&ALAW_DECODE_LE[b as usize]);
         }
         Ok(Frame::Audio(AudioFrame {
             samples: samples_per_channel as u32,

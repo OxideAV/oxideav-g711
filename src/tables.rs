@@ -59,6 +59,26 @@ pub const MULAW_DECODE: [i16; 256] = {
     t
 };
 
+/// Compile-time 256-entry **little-endian byte-pair** decode LUT. Entry
+/// `i` is `MULAW_DECODE[i].to_le_bytes()`, so it is byte-identical to the
+/// `[i16; 256]` table above — there is no second source of truth, just a
+/// pre-serialized view of the same values.
+///
+/// The trait-surface decode hot loop ([`crate::mulaw::UlawDecoder`])
+/// emits interleaved S16 PCM as raw little-endian bytes. Indexing this
+/// table lets each step be a single 2-byte `copy_from_slice` from
+/// `.rodata` instead of an `[i16; 256]` load followed by a per-iter
+/// `i16::to_le_bytes()` recomputation and two scalar stores.
+pub const MULAW_DECODE_LE: [[u8; 2]; 256] = {
+    let mut t = [[0u8; 2]; 256];
+    let mut i = 0;
+    while i < 256 {
+        t[i] = MULAW_DECODE[i].to_le_bytes();
+        i += 1;
+    }
+    t
+};
+
 // -------------- A-law --------------
 //
 // ITU-T G.711 §2. Encoded byte `abcd_efgh` is
@@ -110,6 +130,20 @@ pub const ALAW_DECODE: [i16; 256] = {
     let mut i = 0;
     while i < 256 {
         t[i] = alaw_decode(i as u8);
+        i += 1;
+    }
+    t
+};
+
+/// Compile-time 256-entry **little-endian byte-pair** A-law decode LUT.
+/// See [`MULAW_DECODE_LE`] — entry `i` is `ALAW_DECODE[i].to_le_bytes()`,
+/// byte-identical to the `[i16; 256]` table and used by the trait-surface
+/// decode hot loop for a single-`copy_from_slice` store per sample.
+pub const ALAW_DECODE_LE: [[u8; 2]; 256] = {
+    let mut t = [[0u8; 2]; 256];
+    let mut i = 0;
+    while i < 256 {
+        t[i] = ALAW_DECODE[i].to_le_bytes();
         i += 1;
     }
     t
@@ -269,6 +303,24 @@ mod tests {
             let a = ALAW_DECODE[b as usize] as i32;
             let c = ALAW_DECODE[(b ^ 0x80) as usize] as i32;
             assert_eq!(a, -c, "A-law symmetry failed for byte {:#x}", b);
+        }
+    }
+
+    #[test]
+    fn decode_le_matches_i16_lut() {
+        // The byte-pair LE tables must be a pure serialized view of the
+        // i16 decode tables — same single source of truth, no drift.
+        for b in 0u8..=255 {
+            assert_eq!(
+                MULAW_DECODE_LE[b as usize],
+                MULAW_DECODE[b as usize].to_le_bytes(),
+                "mu-law LE byte-pair LUT diverged at {b:#x}"
+            );
+            assert_eq!(
+                ALAW_DECODE_LE[b as usize],
+                ALAW_DECODE[b as usize].to_le_bytes(),
+                "A-law LE byte-pair LUT diverged at {b:#x}"
+            );
         }
     }
 

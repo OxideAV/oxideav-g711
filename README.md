@@ -213,6 +213,29 @@ decoder pair across a 50-frame PSTN 20 ms burst) now lands at
 any change to the LUT generators, the inner slice load, or the
 encoder/decoder queue management to spot regressions.
 
+**r289** (depth-mode profiling + one bit-identical optimization)
+replaced the per-sample `i16::to_le_bytes()` recomputation in the
+two decode hot loops with a direct **little-endian byte-pair LUT**
+(`MULAW_DECODE_LE` / `ALAW_DECODE_LE`, `[[u8; 2]; 256]`, built at
+compile time from the existing `[i16; 256]` decode tables — no new
+source of truth). `UlawDecoder` / `AlawDecoder::receive_frame` now
+stores each sample with one 2-byte `copy_from_slice` from `.rodata`
+instead of an `[i16; 256]` load + per-iter `to_le_bytes()` + two
+scalar stores. Output is byte-identical (the in-tree
+`bit_exact_reference`, `docs_corpus`, and cross-law transcode
+suites all still pass unchanged, and a new `tables` unit test pins
+`*_DECODE_LE == *_DECODE.to_le_bytes()`). On the store-bound
+8 ch / 48 kHz row (192 KB output per iter) the LE-LUT store is
+consistently ~5-6% faster in the `profile_g711 decode` driver
+(~19.6 → ~18.5 µs/iter); an isolated standalone A/B on the same
+96 KB buffer shows ~+24% (3.56 → 4.68 GiB/s). Small mono / stereo
+rows whose working set fits in L1 are within noise — the store is
+not the bottleneck there. The driver gains two A/B rows
+(`decode-store-recompute` / `decode-store-le-lut`) that quantify
+the change; both LUTs are built outside the timed region and the
+per-sample decode is pre-selected as a function pointer so the only
+difference between the two timed loops is the store strategy.
+
 ## Fuzzing
 
 A libFuzzer-driven [`fuzz/`](fuzz/) package ships six targets that

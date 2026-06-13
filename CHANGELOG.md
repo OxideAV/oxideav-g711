@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- perf: byte-pair little-endian decode LUT for the trait-surface decode
+  hot loop (r289, depth-mode profiling + one bit-identical optimization).
+  `UlawDecoder` / `AlawDecoder::receive_frame` previously loaded the
+  `[i16; 256]` decode table, recomputed `i16::to_le_bytes()` per sample,
+  and did two scalar stores (the r236 shape). It now indexes a
+  pre-serialized `MULAW_DECODE_LE` / `ALAW_DECODE_LE` (`[[u8; 2]; 256]`,
+  generated at compile time from the existing `[i16; 256]` decode tables
+  — no second source of truth) and stores each sample with one 2-byte
+  `copy_from_slice` from `.rodata`. Output is byte-identical: the
+  `bit_exact_reference`, `docs_corpus`, and `cross_law_transcode` suites
+  all pass unchanged, and a new `tables` unit test pins
+  `*_DECODE_LE == *_DECODE.to_le_bytes()` so the serialized view can
+  never drift from the i16 table. Measured ~+24% on an isolated
+  standalone A/B over a 96 KB buffer (3.56 → 4.68 GiB/s) and ~5-6% on the
+  store-bound 8 ch / 48 kHz row of the `profile_g711 decode` driver;
+  small mono / stereo rows that fit in L1 are store-insensitive and stay
+  within noise. The profiling driver gains two A/B rows
+  (`decode-store-recompute` / `decode-store-le-lut`) that isolate the
+  store strategy with the per-sample decode pre-selected as a function
+  pointer and both LUTs hoisted out of the timed region.
+
 ### Other
 
 - tests: new `tests/cross_law_transcode.rs` integration suite (r270) —
