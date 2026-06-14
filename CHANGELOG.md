@@ -54,6 +54,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- tests: new `tests/cross_law_table34.rs` integration suite (r305) —
+  pins the **normative** µ↔A conversion mapping of ITU-T G.711 §3.5,
+  Tables 3/G.711 (µ→A) and 4/G.711 (A→µ). The existing
+  `cross_law_transcode` suite only covered the §3.6 *equipment option*
+  (re-quantising through uniform PCM, `encode_B(decode_A(b))`), which the
+  Recommendation explicitly leaves "to the individual equipment
+  specification." This suite asserts that our PCM-roundtrip transcode
+  reproduces the spec's Table 3 / Table 4 **decoder-output value-number**
+  correspondence for all 128 levels of both laws, in both directions and
+  on both signs — including the non-trivial high-segment jumps
+  (µ value 32→A 25, 33→27, 34→29, 35→31, 36→33) and the deliberately
+  modified transparency points (µ-80↔A-80) the Recommendation §3.6 Note 2
+  documents. Two further tests pin the Note 2 tandem-transparency claims:
+  a µ-A-µ double conversion changes exactly the documented set of µ value
+  numbers {0,2,4,6,8,10,12,14} per sign (and is perfectly transparent on
+  the other 120 levels), and an A-µ-A double conversion changes exactly
+  8 A value numbers per sign. The value-number axis is rebuilt from the
+  crate's own decode tables by magnitude rank (the spec's definition of
+  "value number"), and a bijectivity test guards that axis. Six tests,
+  always CI-gated, no behavioural change — test-only. Finding: our
+  long-standing naive cross-law composition was already bit-identical to
+  the normative tables; this suite is the first to prove it.
 - tests: new `tests/cross_law_transcode.rs` integration suite (r270) —
   pins the µ-law ↔ A-law (PSTN-gateway) transcode contract through the
   trait surface as a deterministic, **always-CI-gated** regression. The

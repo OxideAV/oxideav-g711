@@ -126,6 +126,24 @@ the result is the same byte.
   is byte-idempotent from the second hop on. These are CI-gated on every
   test run, complementing the nightly-only `cross_law_transcode`
   libFuzzer target which was previously the sole µ ↔ A boundary coverage.
+- **Normative µ↔A conversion (Tables 3/4/G.711)** (r305): G.711 §3.5
+  defines the law-conversion mapping in Tables 3/G.711 (µ→A) and
+  4/G.711 (A→µ) as a correspondence between the *decoder-output value
+  numbers* of the two laws. The r270 cross-law suite only pins the §3.6
+  *equipment option* (re-quantise through uniform PCM); r305 adds the
+  missing companion that asserts our transcode reproduces the
+  **normative** Table 3 / Table 4 value-number correspondence for all
+  128 levels of both laws, both directions, both signs — including the
+  high-segment jumps (µ 32→A 25, 33→27, 34→29, 35→31, 36→33) and the
+  deliberately modified transparency points (µ-80↔A-80) of §3.6 Note 2.
+  Two further tests pin the Note 2 tandem-transparency claims: a µ-A-µ
+  double conversion changes exactly the documented µ value-number set
+  {0,2,4,6,8,10,12,14} per sign and is transparent on the other 120
+  levels, and an A-µ-A double conversion changes exactly 8 A value
+  numbers per sign. CI-gated on every run. The finding: the crate's
+  long-standing naive composition was already bit-identical to the
+  normative tables — this suite is the first to prove it against the
+  Recommendation rather than against the PCM-roundtrip baseline alone.
 - **Per-sample quantization bound**: every S16 input round-trips
   within the spec-derived per-segment step bound (full sweep gated on
   `cfg(not(debug_assertions))` so `cargo test --release` exercises all
