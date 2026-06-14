@@ -30,6 +30,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   store strategy with the per-sample decode pre-selected as a function
   pointer and both LUTs hoisted out of the timed region.
 
+### Benchmarks
+
+- bench: new `benches/segment.rs` (r298, depth-mode benchmarks) — pins
+  the third corner of the input-distribution space. The uniform benches
+  spread samples across every segment of the companding curve and the
+  r247 `voice` bench concentrates them in segments 0..=2 (segment-search
+  fast-exit on ~80% of samples); the new bench confines every sample to
+  the **top segment**, so the encode segment search resolves to the same
+  high segment on every sample — the branch-history mirror image of the
+  voice row. Eight rows (encode arith + LUT × law, decode LUT × law,
+  mono 1 s roundtrip × law), input synthesised in-bench from a
+  closed-form window over a deterministic xorshift32 stream (no fixtures,
+  no external corpus). The informative result is the **A-law arith** row:
+  voice ~1.69 GiB/s vs. segment-locked ~1.43 GiB/s (−15%), quantifying
+  the A-law §2 segment-0 short-circuit (taken on voice, never on the
+  segment-locked input). µ-law arith — which has no equivalent
+  short-circuit — is distribution-invariant (~1.47 vs ~1.50 GiB/s), and
+  the branchless LUT rows land within noise across both corners as
+  expected. New `BENCHMARKS.md` records the cross-distribution baseline
+  table + the regression-watch guidance. Measured on aarch64-darwin
+  (release, 3 s window). No behavioural change — bench + docs only.
+
 ### Other
 
 - tests: new `tests/cross_law_transcode.rs` integration suite (r270) —

@@ -75,6 +75,20 @@ harness = false
 name = "voice"
 harness = false
 
+# Round 298 (depth-mode benchmarks, segment-locked follow-up to r247):
+# the uniform-random benches spread samples across every segment of
+# the companding curve and the r247 `voice` bench concentrates them in
+# segments 0..=2 (segment-search fast exit on ~80% of samples). This
+# file adds the third corner — every sample is pinned into the top
+# segment so the encode segment search resolves to the *same* high
+# segment on every sample (the branch-history mirror image of the
+# voice row). Eight rows (encode arith + LUT × law, decode LUT × law,
+# mono 1 s roundtrip × law). Same `cargo bench -p oxideav-g711
+# --bench segment` shape as the other benches.
+[[bench]]
+name = "segment"
+harness = false
+
 # Round 189 (depth-mode profiling): flat measure-this-thing driver
 # for `samply` / `cargo flamegraph` / `perf record`. Mirrors the
 # `benches/{decode,encode,roundtrip}.rs` scenarios byte-for-byte so

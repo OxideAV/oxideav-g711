@@ -151,7 +151,11 @@ cargo bench -p oxideav-g711 --bench encode
 cargo bench -p oxideav-g711 --bench roundtrip
 cargo bench -p oxideav-g711 --bench streaming
 cargo bench -p oxideav-g711 --bench voice
+cargo bench -p oxideav-g711 --bench segment
 ```
+
+A consolidated cross-distribution baseline table lives in
+[`BENCHMARKS.md`](BENCHMARKS.md).
 
 The first four use a uniform-random xorshift32 input distribution
 (every segment of the curve sees equal traffic — the canonical
@@ -171,6 +175,23 @@ input-distribution locality does not dominate per-sample wall
 time. A future regression that splits a hot cache line — e.g. a
 SIMD gather that pulls non-contiguous entries — would show up
 disproportionately on the voice rows.
+
+**r298** added a sixth bench, `segment`, that pins the **third
+corner** of the input-distribution space: every sample is confined
+to the top segment of the companding curve, so the encode segment
+search resolves to the *same* high segment on every sample — the
+branch-history mirror image of the voice row (where the segment-0
+fast exit is taken ~80% of the time, vs. never here). The
+informative result is the **A-law arith** row: the A-law §2
+segment-0 short-circuit is taken on the voice input but never on
+the segment-locked input, measured as ~1.69 GiB/s (voice) vs.
+~1.43 GiB/s (segment-locked), a −15% gap that quantifies that one
+branch directly. The µ-law arith path — which has no equivalent
+short-circuit — is distribution-invariant (~1.47 vs ~1.50 GiB/s),
+and the branchless LUT rows land within noise across both corners
+(encode ~10.8 GiB/s, decode ~5.4 GiB/s) as expected. The
+cross-distribution baseline table and the regression-watch guidance
+live in [`BENCHMARKS.md`](BENCHMARKS.md).
 
 Per-sample LUT decode tops out around 5.5 GiB/s (µ-law and A-law
 roughly tied). Encode runs through the **r230** compile-time
