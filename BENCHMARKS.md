@@ -16,7 +16,14 @@ cargo bench -p oxideav-g711 --bench roundtrip
 cargo bench -p oxideav-g711 --bench streaming
 cargo bench -p oxideav-g711 --bench voice
 cargo bench -p oxideav-g711 --bench segment
+cargo bench -p oxideav-g711 --bench cacheladder
 ```
+
+The first six harnesses share the **distribution** axis below (fixed
+size, varying input distribution / law / path). `cacheladder` (r319) is
+orthogonal — it fixes the distribution (uniform) and sweeps the
+**working-set size** instead; see *Cache-residency size sweep* at the
+end.
 
 ## Input-distribution corners
 
@@ -83,6 +90,30 @@ r236 / r289 optimisation history.
 | encode trait-surface (r236 pre-sized slice store) | ~5.6 GiB/s |
 | roundtrip mono 8 kHz | ~3.1–3.3 GiB/s |
 | streaming (50 × 20 ms PSTN burst, one enc+dec pair) | ~1.7–3.3 GiB/s |
+
+## Cache-residency size sweep (r319 — `cacheladder`)
+
+Orthogonal to the distribution corners: this harness fixes the input
+distribution (uniform) and sweeps the **working-set size** across a
+geometric ladder (1 KiB → 4 KiB → 16 KiB → 64 KiB → 256 KiB → 1 MiB →
+4 MiB of input codewords) for three paths. Throughput is reported
+per-element so every rung is directly comparable; the load-bearing
+signal is the **shape** of each curve and any change in it between
+commits. Absolute numbers are host-specific (cache geometry differs).
+
+| family | path | aarch64-darwin curve shape |
+| --- | --- | --- |
+| `decode_lut_sweep` (µ/A) | direct `decode_sample` LUT | **flat ~5.7 Gelem/s** — compute-bound, 256-entry LUT stays L1-resident, input read once |
+| `decode_decoder_sweep` (µ mono) | trait surface (`make_decoder` → `send_packet`/`receive_frame`) | **~4.05 Gelem/s** — pays the per-packet output `Vec` alloc + S16 LE store (the r289-optimised path) |
+| `encode_arith_sweep` (µ/A) | arithmetic formula (`encode_sample_arith`) | **~750–810 Melem/s** — branch-bound segment search, no table residency |
+
+This is the residency curve the r289 store-strategy A/B needed: r289
+measured `decode-store-recompute` vs. `decode-store-le-lut` at a single
+96 KB / 8 ch / 48 kHz point and asserted "small buffers are
+store-insensitive". The sweep makes that claim falsifiable across the
+whole L1 → DRAM range on a given machine, so a future store-strategy or
+SIMD change can see exactly where its win turns on and whether it
+regresses the small-buffer case.
 
 ## Profiling driver
 
