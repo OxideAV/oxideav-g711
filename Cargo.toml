@@ -89,6 +89,22 @@ harness = false
 name = "segment"
 harness = false
 
+# Round 319 (depth-mode benchmarks, size-sweep follow-up to r173 /
+# r206 / r247 / r298): the existing bench files all fix the buffer /
+# frame size and vary the input *distribution* (uniform / voice /
+# segment-locked), law, and path. None sweep a single law + path across
+# a geometric ladder of buffer sizes — the axis that exposes the
+# L1 -> L2 -> L3 -> DRAM throughput knee of the decode LUT and the
+# encode-arith inner loop. This file sweeps 1 KiB .. 4 MiB of input
+# codewords for the direct-LUT decode, the trait-surface decode (the
+# r289 store path that should roll off as the output Vec outgrows
+# cache), and the arithmetic encode formula path. Per-element throughput
+# keeps every rung comparable. Same `cargo bench -p oxideav-g711
+# --bench cacheladder` shape as the other benches.
+[[bench]]
+name = "cacheladder"
+harness = false
+
 # Round 189 (depth-mode profiling): flat measure-this-thing driver
 # for `samply` / `cargo flamegraph` / `perf record`. Mirrors the
 # `benches/{decode,encode,roundtrip}.rs` scenarios byte-for-byte so

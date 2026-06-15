@@ -32,6 +32,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Benchmarks
 
+- bench: new `benches/cacheladder.rs` (r319, depth-mode benchmarks) —
+  the **working-set size sweep** the existing benches never covered.
+  Every prior bench file fixes the buffer / frame size and varies the
+  input distribution (uniform / voice-Laplacian / segment-locked), law,
+  and path; none sweep a single law + path across a geometric ladder of
+  buffer sizes, which is the axis that exposes the L1 -> L2 -> L3 -> DRAM
+  throughput knee. This file sweeps 1 KiB .. 4 MiB of input codewords
+  across five families: direct-LUT decode (mu/A), trait-surface decode
+  (mu mono — the r289 store path), and arithmetic-encode formula path
+  (mu/A). Per-element `Throughput::Elements` keeps every rung directly
+  comparable. Measured on aarch64-darwin (release): the direct-LUT decode
+  curve is flat at ~5.7 Gelem/s across the whole ladder (compute-bound —
+  the 256-entry LUT stays L1-resident, the streamed input is read once),
+  the trait-surface decode runs ~4.05 Gelem/s (paying the per-packet
+  output `Vec` alloc + S16 little-endian store the r289 work optimised),
+  and the branch-bound arithmetic encode lands ~750-810 Melem/s. The
+  load-bearing signal is the *shape* of each curve on a given machine and
+  any change in that shape between commits — this is the residency curve
+  the r289 store-strategy A/B (measured at a single 96 KB point) needed
+  to make its "small buffers are store-insensitive" claim falsifiable.
+  Input synthesised in-bench from the same deterministic xorshift32 seed
+  as `benches/decode.rs` so a rung lines up with the matching fixed-size
+  row there; no fixtures, no external corpus. No behavioural change —
+  bench only.
 - bench: new `benches/segment.rs` (r298, depth-mode benchmarks) — pins
   the third corner of the input-distribution space. The uniform benches
   spread samples across every segment of the companding curve and the
