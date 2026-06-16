@@ -118,6 +118,15 @@ instead; they delegate to the same `const fn` that populates the LUT.
   all 128 levels of both laws, both directions, both signs, including
   the high-segment jumps and the §3.6 Note 2 tandem-transparency
   claims.
+- **§5 reference sequences (audio level)**: the normative Table 5
+  (A-law) / Table 6 (µ-law) 8-codeword periodic sequences decode to a
+  1 kHz / 0 dBm0 sine at the §2 nominal 8 kHz rate. The decoded
+  waveform is pinned to the exact decoder-output values (A-law
+  ±{8960, 20992}, µ-law ±{8828, 20860}) and asserted to have sine
+  structure (half-wave antisymmetry, even symmetry within each half,
+  monotone quarter-sine), to agree between the direct LUT and the trait
+  surface, to tile into a steady period-8 tone, and to express the same
+  signal in both laws within one A-law top-segment step.
 - **Per-sample quantization bound**: every S16 input round-trips
   within the spec-derived per-segment step bound (full 65 536-sample
   sweep gated on release builds; sparse stride in debug).

@@ -78,6 +78,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- tests: new `tests/reference_sequence_g711.rs` integration suite (r323)
+  — pins the **normative** §5 reference sequences (Table 5/G.711 for
+  A-law, Table 6/G.711 for µ-law). §5 states that applying these
+  periodic 8-codeword sequences to a decoder must produce a 1 kHz sine
+  at 0 dBm0; at the §2 nominal 8 kHz sampling rate, eight samples per
+  period is exactly a 1 kHz fundamental. The crate had exhaustive
+  per-codeword decode coverage (`bit_exact_reference`) and the §3.5
+  cross-law tables (`cross_law_table34`) but never pinned the §5
+  audio-level conformance vectors. Five tests: each law's sequence is
+  packed from the spec's bit-1..8 rows via the §4 serial-transmission
+  convention (bit 1 = polarity bit = MSB, transmitted first — packed by
+  a helper rather than hard-coded hex, so the test documents the bit
+  order), then decoded through both the direct LUT and the registry
+  trait surface (must agree byte-for-byte). The decoded waveform is
+  asserted to have the structure §5 requires of a 1 kHz sine — 8-sample
+  period, half-wave antisymmetry (`y[i] == -y[i+4]`), even symmetry
+  inside each half (`y[0]==y[3]`, `y[1]==y[2]`), and a monotone
+  quarter-sine (`|y[1]| > |y[0]|`, i.e. sin 67.5° > sin 22.5°) — and the
+  exact decoder-output values are pinned (A-law
+  `±{8960, 20992}`, µ-law `±{8828, 20860}`) so any table edit that
+  perturbs the conformance waveform fails here. Further tests: tiling
+  three periods proves period-8 continuity across the boundary (the
+  §1.2/§3.2 stateless property); the two laws' tones share the same sine
+  *shape* and never disagree by more than one A-law top-segment step
+  (256 LSB) while being non-bit-identical (the §5 T_max difference,
+  3.14 vs 3.17 dBm0); and a §4 sanity check pins that wire byte 0xD5
+  decodes to A-law +8 and that the bit-1-first packer produces 0xD5.
+  No `src/` change, no public-API change — test-only, CI-gated. Finding:
+  our decode tables reproduce the §5 reference sequences exactly; this
+  is the first test to assert the audio-level conformance vectors.
 - tests: new `tests/cross_law_table34.rs` integration suite (r305) —
   pins the **normative** µ↔A conversion mapping of ITU-T G.711 §3.5,
   Tables 3/G.711 (µ→A) and 4/G.711 (A→µ). The existing
