@@ -171,11 +171,13 @@ comparable). A consolidated cross-distribution baseline table lives in
 
 ## Fuzzing
 
-A libFuzzer-driven [`fuzz/`](fuzz/) package ships six targets that
+A libFuzzer-driven [`fuzz/`](fuzz/) package ships seven targets that
 exercise the framing wrapper, parameter-validation surface, per-sample
-invariants, and the cross-law transcoding lifecycle as panic-/UB-freedom
-contracts: `decode_pipeline`, `encode_pipeline`, `per_sample_invariants`,
-`streaming_pipeline`, `factory_params`, `cross_law_transcode`.
+invariants, the cross-law transcoding lifecycle, and the µ-law all-zero
+suppression path (§3.2) as panic-/UB-freedom contracts:
+`decode_pipeline`, `encode_pipeline`, `per_sample_invariants`,
+`streaming_pipeline`, `factory_params`, `cross_law_transcode`,
+`zero_suppress_invariants`.
 
 ```sh
 cargo +nightly fuzz run <target>

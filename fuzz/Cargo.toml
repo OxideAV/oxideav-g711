@@ -21,7 +21,7 @@ cargo-fuzz = true
 # is where panics, integer overflows, or attacker-driven
 # allocations could plausibly hide.
 #
-# Six targets cover the six risk shapes:
+# Seven targets cover the seven risk shapes:
 #
 # - **`decode_pipeline`**: arbitrary bytes through both
 #   `mulaw::UlawDecoder` and `alaw::AlawDecoder` at attacker-chosen
@@ -82,6 +82,17 @@ cargo-fuzz = true
 #   sample, or future per-frame state addition that coupled
 #   adjacent samples surfaces as a divergent byte on the very
 #   first transcoded position.
+# - **`zero_suppress_invariants`** (r337): the µ-law all-zero
+#   character-signal suppression path (§3.2,
+#   `mulaw::encode_sample_zero_suppress`). This is the only encode
+#   path the other six targets do not reach — they drive the plain
+#   `encode_sample` LUT, never the suppression rewrite. Asserts the
+#   spec's wire-level contract across attacker-chosen i16 sequences:
+#   the all-zero octet is never emitted, every non-forbidden codeword
+#   is left byte-identical to the plain encoder, the one forbidden
+#   codeword is rewritten to exactly the spec `00000010` replacement,
+#   and the substituted word decodes one uniform segment-7 step inward
+#   from the suppressed all-zero word (the decoder is untouched).
 [dependencies]
 libfuzzer-sys = "0.4"
 oxideav-core = "0.1"
@@ -134,5 +145,11 @@ doc = false
 [[bin]]
 name = "cross_law_transcode"
 path = "fuzz_targets/cross_law_transcode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "zero_suppress_invariants"
+path = "fuzz_targets/zero_suppress_invariants.rs"
 test = false
 doc = false

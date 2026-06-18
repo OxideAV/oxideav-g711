@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- fuzz: `zero_suppress_invariants` target (r337). A seventh libFuzzer
+  target covering the µ-law all-zero character-signal suppression path
+  (ITU-T G.711 §3.2, `mulaw::encode_sample_zero_suppress`) — the only
+  encode path the existing six targets do not reach (they drive the plain
+  `encode_sample` LUT, never the suppression rewrite). Drives
+  attacker-chosen i16 sequences and asserts the spec's wire-level
+  contract per sample: the all-zero octet is never emitted, every
+  non-forbidden codeword is byte-identical to the plain encoder, the one
+  forbidden codeword is rewritten to exactly the spec `00000010`
+  replacement, and (once per execution) the substituted codeword decodes
+  one uniform segment-7 step inward from the suppressed all-zero word with
+  the decoder untouched. These are the same invariants
+  `tests/mulaw_zero_suppression.rs` pins exhaustively, re-expressed as a
+  panic-/UB-freedom regression net against future changes to the
+  suppression rewrite or the underlying encode LUT.
+
 - feat: µ-law all-zero character-signal suppression (ITU-T G.711 §3.2, r331).
   New `mulaw::encode_sample_zero_suppress(sample) -> u8` plus the
   `mulaw::MULAW_ZERO_CODEWORD` (`0x00`) / `mulaw::MULAW_ZERO_SUPPRESS_CODEWORD`
