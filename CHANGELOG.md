@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- feat: µ-law all-zero character-signal suppression (ITU-T G.711 §3.2, r331).
+  New `mulaw::encode_sample_zero_suppress(sample) -> u8` plus the
+  `mulaw::MULAW_ZERO_CODEWORD` (`0x00`) / `mulaw::MULAW_ZERO_SUPPRESS_CODEWORD`
+  (`0x02`) constants. Identical to `encode_sample` except the one codeword that
+  would be transmitted as the all-zero octet `00000000` is rewritten to the
+  spec-mandated `00000010`, the substitution G.711 §3.2 requires on links (classic
+  T1 spans) where a run of all-zero octets would starve the receiver's bit-clock
+  recovery. The decode path is untouched: the substituted `0x02` decodes like any
+  other byte. A new `tests/mulaw_zero_suppression.rs` integration suite pins the
+  wire-level contract over the full 16-bit input domain — the all-zero octet is
+  never emitted, exactly the 1157 most-negative segment-7 inputs (-32768 ..= -31612)
+  are rewritten to `0x02` and every other codeword is byte-identical to the plain
+  encoder, the rewrite boundary is exact (-31611 already carries a non-zero LSB and
+  is left untouched), and the substituted codeword decodes one uniform segment-7
+  step inward from the suppressed one (the §3.2 "value number 126 → 125" single
+  decision-interval move). The numeric decoder-output value `-7519` §3.2 quotes is
+  in the spec's own 14-bit Table-2 magnitude convention, which differs from this
+  crate's FFmpeg-style decode scaling, so that exact figure is documented as a
+  spec-table gap rather than asserted (see the final report / test-module note).
+
 ### Performance
 
 - perf: byte-pair little-endian decode LUT for the trait-surface decode

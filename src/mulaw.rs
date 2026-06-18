@@ -33,6 +33,48 @@ pub fn encode_sample(sample: i16) -> u8 {
     MULAW_ENCODE[sample as u16 as usize]
 }
 
+/// The µ-law wire codeword that all-zero suppression replaces, and its
+/// replacement (ITU-T G.711 §3.2).
+///
+/// G.711 §3.2 third paragraph: *"When using the µ-law in networks where
+/// suppression of the all 0 character signal is required, the character
+/// signal corresponding to negative input values between decision values
+/// numbers 127 and 128 should be `00000010`."*
+///
+/// On T1-style transmission a long run of all-zero octets (`0x00`) on the
+/// wire starves the receiver's bit-clock recovery, so the standard mandates
+/// that the one codeword that would be transmitted as all zeros never appear
+/// — the encoder substitutes the spec-given wire codeword `00000010` (`0x02`)
+/// in its place. The substitution is a pure wire-byte rewrite at encode time;
+/// the decoder is untouched (a conformant decoder already maps `0x02` to its
+/// table value).
+pub const MULAW_ZERO_CODEWORD: u8 = 0x00;
+/// Replacement codeword for [`MULAW_ZERO_CODEWORD`] under §3.2 all-zero
+/// suppression — the literal `00000010` from the spec text.
+pub const MULAW_ZERO_SUPPRESS_CODEWORD: u8 = 0x02;
+
+/// Encode one S16 sample as a µ-law byte with **all-zero suppression**
+/// (ITU-T G.711 §3.2): identical to [`encode_sample`] except the single
+/// codeword that would be transmitted as `00000000` ([`MULAW_ZERO_CODEWORD`])
+/// is rewritten to the spec-mandated `00000010`
+/// ([`MULAW_ZERO_SUPPRESS_CODEWORD`]). Use this on links (classic T1 spans)
+/// that require a minimum ones-density for bit-clock recovery, where a run of
+/// all-zero octets would break receiver synchronisation.
+///
+/// Every other codeword is unchanged, so the mapping is bit-identical to
+/// [`encode_sample`] on all inputs that do not quantise to the all-zero
+/// codeword. The suppression is purely a transmit-side concern: a standard
+/// [`decode_sample`] handles the substituted `0x02` like any other byte.
+#[inline]
+pub fn encode_sample_zero_suppress(sample: i16) -> u8 {
+    let byte = encode_sample(sample);
+    if byte == MULAW_ZERO_CODEWORD {
+        MULAW_ZERO_SUPPRESS_CODEWORD
+    } else {
+        byte
+    }
+}
+
 /// Arithmetic µ-law encode (ITU-T G.711 §3.2). Same result as
 /// [`encode_sample`] but computed from the formula every call instead of
 /// loaded from [`MULAW_ENCODE`]:

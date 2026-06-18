@@ -75,6 +75,17 @@ structs are also constructible via `mulaw::make_decoder` /
 `alaw::make_decoder` / etc. for full control over construction without
 the registry lookup.
 
+### µ-law all-zero suppression (G.711 §3.2)
+
+`mulaw::encode_sample_zero_suppress` is a transmit-side variant of
+`mulaw::encode_sample` for links that require a minimum ones-density —
+classic T1 spans where a run of all-zero octets starves the receiver's
+bit-clock recovery. It is byte-identical to `encode_sample` except the
+single codeword that would be sent as `00000000` is rewritten to the
+spec-mandated `00000010` (`mulaw::MULAW_ZERO_SUPPRESS_CODEWORD`). The
+decoder is unaffected — a standard `decode_sample` handles the
+substituted `0x02` like any other byte.
+
 ### Encode hot path — compile-time S16 → byte LUTs
 
 `mulaw::encode_sample` and `alaw::encode_sample` index 64 KiB
