@@ -16,8 +16,8 @@
 //! (forbidden codeword + replacement codeword), which is convention-
 //! independent. The numeric decoder-output value -7519 quoted by §3.2 is in
 //! the spec's own 14-bit Table-2 magnitude convention, which differs from the
-//! FFmpeg-style decode scaling this crate uses; see the test-module note for
-//! the documented gap.
+//! 16-bit left-justified decode scaling this crate uses; see the test-module
+//! note for the documented gap.
 
 use oxideav_g711::mulaw::{
     decode_sample, encode_sample, encode_sample_zero_suppress, MULAW_ZERO_CODEWORD,

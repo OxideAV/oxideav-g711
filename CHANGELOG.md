@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   step inward from the suppressed one (the §3.2 "value number 126 → 125" single
   decision-interval move). The numeric decoder-output value `-7519` §3.2 quotes is
   in the spec's own 14-bit Table-2 magnitude convention, which differs from this
-  crate's FFmpeg-style decode scaling, so that exact figure is documented as a
+  crate's 16-bit left-justified decode scaling, so that exact figure is documented as a
   spec-table gap rather than asserted (see the final report / test-module note).
 
 ### Performance

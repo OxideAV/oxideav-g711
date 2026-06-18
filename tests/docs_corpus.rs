@@ -4,7 +4,7 @@
 //! * `input.{wav,au,raw}` — the encoded G.711 bitstream (one byte per
 //!   sample-per-channel) wrapped in WAV / Sun .au / raw containers.
 //! * `expected.wav` (occasionally `expected_from_raw.wav`) — the
-//!   reference 16-bit signed PCM that an FFmpeg decode produces.
+//!   reference 16-bit left-justified signed PCM (the black-box validator output).
 //! * `expected.sha256` / inlined SHAs in `notes.md` — bit-exact hash of
 //!   the reference output (informational; not consumed here — we
 //!   compare PCM samples directly).
