@@ -124,11 +124,19 @@ instead; they delegate to the same `const fn` that populates the LUT.
   byte-for-byte for all 256 codewords in both directions, across
   1 / 2 / 6 / 8 channels, including the full A → B → A reverse and
   tandem double-hop idempotence.
-- **Normative µ↔A conversion**: the transcode reproduces the G.711
-  §3.5 Table 3 (µ→A) / Table 4 (A→µ) value-number correspondence for
-  all 128 levels of both laws, both directions, both signs, including
-  the high-segment jumps and the §3.6 Note 2 tandem-transparency
-  claims.
+- **Normative µ↔A conversion**: the G.711 §3.5 Table 3 (µ→A) / Table 4
+  (A→µ) value-number correspondences are transcribed directly from the
+  Recommendation and self-validated — round-tripping them reproduces the
+  §3.6 Note 2 tandem-transparency change sets *exactly* (A-µ-A changes A
+  value numbers {26,28,30,32,45,47,63,80}; µ-A-µ changes µ value numbers
+  {0,2,4,6,8,10,12,14}), including the deliberate {µ-80 ↔ A-81} tweak the
+  Note states verbatim. The crate's transcode is the §3.6 **equipment
+  option** (re-quantise through uniform PCM), which is a distinct, also
+  legal conversion: it matches the normative tables across the whole
+  value-number axis *except* an enumerated segment-boundary set where it
+  rounds to the nearest level rather than following the table's deliberate
+  modification — each such divergence pinned as a single value-number
+  step, both directions, both signs.
 - **§5 reference sequences (audio level)**: the normative Table 5
   (A-law) / Table 6 (µ-law) 8-codeword periodic sequences decode to a
   1 kHz / 0 dBm0 sine at the §2 nominal 8 kHz rate. The decoded

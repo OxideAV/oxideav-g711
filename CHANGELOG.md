@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- test data: corrected the `TABLE3_MU_TO_A` and `TABLE4_A_TO_MU`
+  normative-conversion reference arrays in `tests/cross_law_table34.rs`,
+  which were mis-transcribed in their upper regions (µ value numbers ≥ 48,
+  A value numbers ≥ 80) (r380). The errors masked the deliberate §3.6
+  Note 2 transparency tweak the Recommendation states verbatim: "µ-80 is
+  converted to A-81 instead of A-80, and A-80 is converted to µ-79 instead
+  of µ-80." The arrays are now transcribed directly from
+  `docs/audio/g711/T-REC-G.711-198811-I.pdf` Tables 3/4, and a new
+  self-validation test (`normative_tables_reproduce_section_3_6_note_2`)
+  round-trips them to confirm they reproduce the §3.6 Note 2 change sets
+  exactly — A-µ-A changes A value numbers {26,28,30,32,45,47,63,80}, µ-A-µ
+  changes µ value numbers {0,2,4,6,8,10,12,14}. The previously-passing
+  `mulaw_to_alaw_matches_table3_positive` /
+  `alaw_to_mulaw_matches_table4_positive` tests were validating against
+  the corrupted data; they are reframed (see Changed) to honestly
+  distinguish the normative table-driven conversion from the §3.6
+  equipment-option PCM-roundtrip this crate implements.
+
+### Changed
+
+- test: the cross-law conversion tests now distinguish the two legal G.711
+  law conversions (r380): the §3.5 normative **table-driven** conversion
+  (Tables 3/4, embedding the §3.6 Note 2 transparency tweak) and the §3.6
+  **equipment-option** PCM-roundtrip (`encode_B(decode_A(b))`) this crate
+  implements. The two agree on the bulk of the value-number axis but
+  deliberately diverge at an enumerated set near the segment boundaries
+  and the {µ-80 ↔ A-81} tweak (`MU_TO_A_EQUIP_DIVERGENCE` /
+  `A_TO_MU_EQUIP_DIVERGENCE`), each a single value-number step. The
+  reframed tests pin both: the crate's transcode matches Tables 3/4 except
+  on the documented divergence set, and the divergence set itself is
+  exact. A-µ-A under the equipment option changes the segment-boundary set
+  {26,28,30,32,46,48,64,96} (vs the table-driven {…,45,47,63,80}); both
+  honour the §3.6 Note 2 count of 8 per sign.
+
 ### Added
 
 - test: `substituted_codeword_matches_spec_minus_7519` (r380). Pins the
