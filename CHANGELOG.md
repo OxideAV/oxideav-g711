@@ -45,6 +45,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- test: `reference_tone_headroom_matches_section_5_tmax_ordering` (r380) —
+  pins the §5 theoretical-load-capacity ordering. §5 states A-law
+  T_max = +3.14 dBm0 and µ-law T_max = +3.17 dBm0, so the A-law 0 dBm0
+  reference tone sits closer to full scale (less headroom) than the µ-law
+  one. The test recovers each tone's fundamental amplitude from its 67.5°
+  sample, compares it to the law's peak reconstruction level, and asserts
+  both headrooms land in the §5 +3.1 dBm0 neighbourhood with A-law < µ-law.
+  The exact +3.14 / +3.17 figures are not asserted (they depend on the
+  dBm0 reference convention §5 does not spell out enough to derive
+  cleanly) — only the cleanly-derivable ordering.
+
 - test: `tests/decision_value_lattice.rs` (r380) — pins the §3.6 / Tables
   1/2 uniform-PCM reconstruction-level *geometry*, complementing the
   formula-agreement (`bit_exact_reference.rs`) and per-sample error-bound

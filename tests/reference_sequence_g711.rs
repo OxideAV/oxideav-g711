@@ -249,6 +249,65 @@ fn alaw_and_mulaw_reference_tones_are_the_same_signal() {
     );
 }
 
+/// §5 level relationship — the two reference tones express the same
+/// 1 kHz / 0 dBm0 stimulus, but §5 states different theoretical load
+/// capacities: **A-law T_max = +3.14 dBm0, µ-law T_max = +3.17 dBm0**.
+/// T_max is the level of a sine that just reaches full scale, so a higher
+/// T_max means more headroom above the 0 dBm0 reference. The A-law tone
+/// therefore sits *closer* to its full-scale peak than the µ-law tone
+/// (3.14 dB of headroom vs 3.17 dB). We pin this directional relationship
+/// — derivable from the §5 numbers alone — by comparing each tone's
+/// fundamental amplitude to its law's peak reconstruction level.
+///
+/// The fundamental amplitude is recovered from the second sample of each
+/// quarter-period: at 8 kHz the §5 sequence samples the sine at 22.5°,
+/// 67.5°, …, so `sample[1] = A0 · sin 67.5°`. We do not assert the exact
+/// +3.14 / +3.17 figures (those depend on the dBm0 / digital-milliwatt
+/// reference convention, which §5 does not spell out enough to derive
+/// cleanly); we assert the *ordering* and that both headrooms are a small
+/// positive few-tenths-of-a-dB, consistent with the stated T_max values.
+#[test]
+fn reference_tone_headroom_matches_section_5_tmax_ordering() {
+    let alaw: Vec<i16> = pack(&ALAW_TABLE5)
+        .iter()
+        .map(|&b| oxideav_g711::alaw::decode_sample(b))
+        .collect();
+    let mulaw: Vec<i16> = pack(&MULAW_TABLE6)
+        .iter()
+        .map(|&b| oxideav_g711::mulaw::decode_sample(b))
+        .collect();
+
+    let sin_67_5 = 67.5f64.to_radians().sin();
+    // sample[1] is the 67.5° sample of the (negative-going first) half;
+    // use its magnitude.
+    let a_amp = f64::from(alaw[1].unsigned_abs()) / sin_67_5;
+    let u_amp = f64::from(mulaw[1].unsigned_abs()) / sin_67_5;
+
+    // Peak reconstruction (full scale) per law.
+    const A_PEAK: f64 = 32256.0;
+    const U_PEAK: f64 = 32124.0;
+    let a_headroom_db = 20.0 * (A_PEAK / a_amp).log10();
+    let u_headroom_db = 20.0 * (U_PEAK / u_amp).log10();
+
+    // Both tones sit a small positive headroom below full scale (a few
+    // tenths of a dB, in the neighbourhood of the §5 +3.1 dBm0 region).
+    assert!(
+        (2.5..3.5).contains(&a_headroom_db),
+        "A-law headroom {a_headroom_db:.3} dB out of the §5 T_max neighbourhood"
+    );
+    assert!(
+        (2.5..3.5).contains(&u_headroom_db),
+        "µ-law headroom {u_headroom_db:.3} dB out of the §5 T_max neighbourhood"
+    );
+    // §5 ordering: A-law T_max (3.14) < µ-law T_max (3.17) ⇒ the A-law tone
+    // has less headroom (sits closer to full scale) than the µ-law tone.
+    assert!(
+        a_headroom_db < u_headroom_db,
+        "§5 T_max ordering violated: A-law headroom {a_headroom_db:.3} dB \
+         must be < µ-law {u_headroom_db:.3} dB (A T_max 3.14 < µ T_max 3.17)"
+    );
+}
+
 /// Sanity on the §4 transmission convention encoded in `row_to_byte`:
 /// the A-law silence/idle codeword in Table 1a (positive smallest
 /// magnitude, decoder output +8) is the row `1 0 1 0 1 0 1 0` after even-
