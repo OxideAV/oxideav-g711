@@ -45,6 +45,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- test: `tests/decision_value_lattice.rs` (r380) — pins the §3.6 / Tables
+  1/2 uniform-PCM reconstruction-level *geometry*, complementing the
+  formula-agreement (`bit_exact_reference.rs`) and per-sample error-bound
+  (`quantization_property.rs`) suites. Asserts each law's 256 decode
+  outputs are exactly 8 segments × 16 evenly-spaced levels with the
+  correct per-segment step (µ-law `1<<(exp+3)`; A-law `16` in segment 0,
+  `16<<(exp-1)` in segments 1..=7), the correct segment base levels
+  (µ-law `(132<<exp)-132`, A-law `8` / `0x108<<(exp-1)`), the spec peaks
+  (µ-law 32124, A-law 32256), and that the encoder's decision thresholds
+  sit at the lattice midpoints (mid-tread quantizer). A decode-table edit
+  that stayed inside the error bound but skewed a single segment's step
+  would slip past the other suites and fail here.
+
 - test: `substituted_codeword_matches_spec_minus_7519` (r380). Pins the
   exact §3.2 decoder-output value the spec names for the all-zero-
   suppression replacement codeword `00000010` — "the value at the decoder

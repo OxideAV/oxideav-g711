@@ -149,6 +149,13 @@ instead; they delegate to the same `const fn` that populates the LUT.
 - **Per-sample quantization bound**: every S16 input round-trips
   within the spec-derived per-segment step bound (full 65 536-sample
   sweep gated on release builds; sparse stride in debug).
+- **Reconstruction-level lattice geometry (§3.6 / Tables 1/2)**: each
+  law's 256 decode outputs are exactly 8 segments × 16 evenly-spaced
+  reconstruction levels with the correct per-segment step, segment base
+  levels and spec peaks (µ-law 32124, A-law 32256), and the encoder's
+  decision thresholds sit at the lattice midpoints (mid-tread quantizer).
+  This pins the curve *geometry* independently of the formula-agreement
+  and error-bound suites.
 - **PSNR floor**: 1-second sinusoids at 400 Hz / 1 kHz / 2 kHz at
   -3 dBFS round-trip with PSNR ≥ 35 dB (measured: µ-law ~41–47 dB,
   A-law ~39–49 dB).
