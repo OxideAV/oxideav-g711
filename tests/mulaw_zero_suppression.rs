@@ -14,10 +14,12 @@
 //!
 //! These tests pin the *wire-level* contract the spec states literally
 //! (forbidden codeword + replacement codeword), which is convention-
-//! independent. The numeric decoder-output value -7519 quoted by §3.2 is in
-//! the spec's own 14-bit Table-2 magnitude convention, which differs from the
-//! 16-bit left-justified decode scaling this crate uses; see the test-module
-//! note for the documented gap.
+//! independent. They also pin the *numeric* decoder-output value -7519 the
+//! spec names: that figure is in the spec's own 14-bit Table-2 magnitude
+//! convention, which is the 16-bit left-justified decode scaling this crate
+//! uses divided by the segment-7 quantum (4). The exact correspondence
+//! (-7519 ↔ -30076 here, and the value-number 127 → 125 two-step move) is
+//! pinned in `substituted_codeword_matches_spec_minus_7519` below.
 
 use oxideav_g711::mulaw::{
     decode_sample, encode_sample, encode_sample_zero_suppress, MULAW_ZERO_CODEWORD,
@@ -104,4 +106,54 @@ fn substituted_codeword_decodes_as_adjacent_negative_level() {
     assert!(v00 < v01 && v01 < v02 && v02 < 0);
     // Uniform segment-7 step: the levels are evenly spaced.
     assert_eq!(v01 - v00, v02 - v01);
+}
+
+/// The exact §3.2 decoder-output value. The spec states the substituted
+/// `00000010` codeword has "the value at the decoder output is -7519" with
+/// "decoder output value number 125".
+///
+/// This crate decodes into the 16-bit left-justified convention, which is
+/// the spec's 14-bit magnitude convention scaled up by 4 (the µ-law
+/// quantum spans 4 in this domain). So the spec's -7519 14-bit value is
+/// `-7519 * 4 = -30076` here, and the spec's all-zero codeword
+/// decoder-output value -8031 (value number 127) is `-8031 * 4 = -32124`.
+///
+/// The value-number arithmetic also checks out: the all-zero codeword
+/// `0x00` is value number 127, the intervening `0x01` is 126, and the
+/// substituted `0x02` is 125 — the spec's "value number 125" statement is
+/// the two-step inward move on the segment-7 negative ladder.
+#[test]
+fn substituted_codeword_matches_spec_minus_7519() {
+    // Spec §3.2: the 14-bit decoder-output value of the replacement.
+    const SPEC_14BIT_VALUE: i32 = -7519;
+    // Spec §3.2: the all-zero codeword's 14-bit decoder-output value
+    // (value number 127) — the familiar µ-law extreme magnitude.
+    const SPEC_14BIT_ZERO_WORD_VALUE: i32 = -8031;
+    // This crate's 16-bit-left-justified convention is the 14-bit
+    // convention scaled by the µ-law segment-7 quantum (4).
+    const QUANTUM: i32 = 4;
+
+    let v02 = decode_sample(MULAW_ZERO_SUPPRESS_CODEWORD) as i32;
+    assert_eq!(
+        v02,
+        SPEC_14BIT_VALUE * QUANTUM,
+        "substituted 0x02 must decode to the §3.2 -7519 value (×4 = {} here)",
+        SPEC_14BIT_VALUE * QUANTUM
+    );
+    assert_eq!(v02 / QUANTUM, SPEC_14BIT_VALUE, "14-bit-domain value");
+
+    let v00 = decode_sample(MULAW_ZERO_CODEWORD) as i32;
+    assert_eq!(
+        v00,
+        SPEC_14BIT_ZERO_WORD_VALUE * QUANTUM,
+        "all-zero codeword must decode to the §3.2 -8031 value (×4 here)"
+    );
+
+    // The two codewords are exactly two segment-7 quantization steps apart:
+    // value number 127 (0x00) → value number 125 (0x02).
+    let v01 = decode_sample(0x01) as i32;
+    let step = v01 - v00;
+    assert_eq!(v02 - v00, 2 * step, "0x02 is two value numbers above 0x00");
+    // In the 14-bit domain that two-step move is -8031 → -7519.
+    assert_eq!(SPEC_14BIT_ZERO_WORD_VALUE + 2 * (step / QUANTUM), -7519);
 }

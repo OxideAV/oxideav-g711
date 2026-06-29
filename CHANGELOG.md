@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- test: `substituted_codeword_matches_spec_minus_7519` (r380). Pins the
+  exact §3.2 decoder-output value the spec names for the all-zero-
+  suppression replacement codeword `00000010` — "the value at the decoder
+  output is -7519 … decoder output value number 125". The crate's
+  16-bit-left-justified decode convention is the spec's 14-bit magnitude
+  convention scaled by the segment-7 quantum (4), so the test asserts
+  `decode_sample(0x02) == -7519 * 4 == -30076` and the all-zero codeword
+  `decode_sample(0x00) == -8031 * 4 == -32124`, and verifies the value-
+  number ladder (127 → 125 = a two-step inward move). This closes the
+  numeric-value gap the module doc previously flagged: the -7519 figure is
+  now pinned exactly rather than only the wire-level codeword contract.
+
 ### Changed
 
 - docs: rewrote the `tables::tests::mulaw_endpoints` doc comment from a
