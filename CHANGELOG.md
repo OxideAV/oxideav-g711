@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- docs: rewrote the `tables::tests::mulaw_endpoints` doc comment from a
+  stray stream-of-consciousness derivation (a "wait that's not right"
+  scratch note) into a clean ITU-T G.711 §3 statement of the digital-zero
+  codewords (`0xFF` / `0x7F` → 0) and the extreme-magnitude derivation
+  (`(((0x0F << 3) + 0x84) << 7) - 0x84 = 32124`), and added explicit
+  `MULAW_DECODE[0x80] == 32124` / `MULAW_DECODE[0x00] == -32124` endpoint
+  assertions (r380). No behavioural change — the decode LUT is unchanged.
+- clean-room hygiene: removed an external-implementation reference from the
+  `tests/bit_exact_reference.rs` µ-law encode-mirror comment, replacing it
+  with a spec-sourced derivation note (the second source of truth is
+  written from ITU-T G.711 §3.2 alone) (r380).
+
 ### Added
 
 - fuzz: `zero_suppress_invariants` target (r337). A seventh libFuzzer

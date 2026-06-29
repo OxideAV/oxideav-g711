@@ -27,9 +27,13 @@ fn mulaw_ref_decode(b: u8) -> i16 {
 
 // --- Reference µ-law encode (mirror of decode, arithmetic form) --------
 //
-// This follows the canonical Sun Microsystems reference (public-domain)
-// used throughout the telecom industry and cited by every interoperable
-// G.711 implementation.
+// Derived directly from the ITU-T G.711 §3.2 definition: strip the sign,
+// clip the magnitude to the largest representable amplitude, add the §3.2
+// bias (0x84), locate the segment as the position of the topmost set bit
+// in bits 7..14, slice the 4-bit mantissa below it, then complement the
+// composed S|E|M byte for the on-wire form. This is an independent second
+// source of truth from the crate's own `encode_sample`, written from the
+// spec text alone so a divergence in either fails this test.
 fn mulaw_ref_encode(sample: i16) -> u8 {
     const BIAS: i32 = 0x84;
     const CLIP: i32 = 32635;

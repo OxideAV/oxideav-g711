@@ -260,29 +260,29 @@ pub static ALAW_ENCODE: [u8; 65536] = {
 mod tests {
     use super::*;
 
-    /// Canonical µ-law endpoints from ITU-T G.711 reference.
+    /// Canonical µ-law endpoint codewords (ITU-T G.711 §3).
     ///
-    /// µ-law byte 0xFF = digital zero → decoded value 0.
-    /// µ-law byte 0x7F = digital zero with sign bit set → −0 (still 0).
-    /// µ-law byte 0x00 = most-negative wire value → −8031 amplitude... wait
-    /// that's not right; let me check.
+    /// - `0xFF` is the digital-zero codeword (un-complemented to all bits
+    ///   clear: sign=0, exp=0, mant=0) → decoded value `0`.
+    /// - `0x7F` is digital zero with the sign bit set (negative zero) →
+    ///   also `0`.
+    /// - `0x00` is the most-negative wire value and `0x80` the most-positive;
+    ///   they are exact negatives of each other.
     ///
-    /// Canonical endpoints are: 0x7F → 0 (+0 with un-complement giving
-    /// sign=0 exp=0 mant=0 → 0). 0xFF → 0 (sign=1). 0x00 → most-negative
-    /// output = −8031. 0x80 → most-positive = 8031.
+    /// The extreme magnitude this crate emits is `(((0x0F << 3) + 0x84)
+    /// << 7) - 0x84 = 30844` in the 16-bit left-justified convention used
+    /// throughout (the spec's own 14-bit magnitude convention is this value
+    /// scaled down — the familiar "±8031" figure is the 13-bit form).
     #[test]
     fn mulaw_endpoints() {
         assert_eq!(MULAW_DECODE[0xFF], 0);
         assert_eq!(MULAW_DECODE[0x7F], 0);
-        // Largest segment, largest mantissa → magnitude =
-        //   ((0x0F<<1)|1)<<7 − 132  = (31 << 7) − 132 = 3968 − 132 = 3836?
-        // Wait the formula uses (mant*2+1)<<(exp+2) − bias.
-        //  exp=7, mant=0x0F: ((15<<1)|1) = 31; 31 << (7+2) = 31 << 9 = 15872.
-        //  minus bias 132 = 15740. Sign bit: 0x00 → sign=1 (inverted).
-        // So MULAW_DECODE[0x00] should be −8031 from simple mu-law, but
-        // we compute −(((0x0F<<1)|1)<<(7+2)) − 132) = −15740. That's the
-        // 14-bit form. (Common "G.711 range is ±8031" refers to 13-bit
-        // left-justified by 2.)
+        // exp=7, mant=0x0F: mag = (((0x0F << 3) + 0x84) << 7) - 0x84
+        //   = ((120 + 132) << 7) - 132 = (252 << 7) - 132 = 32256 - 132
+        //   = 32124. `0x80` un-complements to sign=0 (positive), `0x00`
+        //   to sign=1 (negative), so they are exact negatives.
+        assert_eq!(MULAW_DECODE[0x80], 32124);
+        assert_eq!(MULAW_DECODE[0x00], -32124);
         assert_eq!(MULAW_DECODE[0x00], -(MULAW_DECODE[0x80] as i32) as i16);
     }
 
