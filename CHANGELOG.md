@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.8](https://github.com/OxideAV/oxideav-g711/compare/v0.0.7...v0.0.8) - 2026-07-03
+
+### Added
+
+- µ-law all-zero character-signal suppression (G.711 §3.2, r331)
+
+### Fixed
+
+- anchor .gitignore Cargo.lock to crate root so tracked fuzz/Cargo.lock is not ignored (release-plz guard)
+
+### Other
+
+- pin §5 T_max headroom ordering for reference tones (r380)
+- pin §3.6/Tables 1/2 reconstruction-level lattice geometry (r380)
+- correct normative Tables 3/4 transcription + distinguish §3.6
+- pin §3.2 -7519 decoder-output value exactly (r380)
+- clean-room hygiene + tables endpoint doc rewrite (r380)
+- zero_suppress_invariants target — µ-law §3.2 all-zero suppression (r337)
+- neutralize decorative FFmpeg-naming in test/changelog prose
+- pin G.711 §5 reference sequences (Table 5/6) as 1 kHz 0 dBm0 conformance (r323)
+- record cacheladder size-sweep baseline in BENCHMARKS.md (r319)
+- cache-residency size sweep (r319 depth-mode benchmarks)
+- refresh to current status, drop per-round changelog cruft
+- pin normative G.711 Tables 3/4 µ↔A conversion (r305)
+- segment-locked input-distribution corner + BENCHMARKS.md (r298)
+- byte-pair LE decode LUT for trait-surface decode hot loop (r289)
+- cross-law µ ↔ A transcode contract as CI-gated integration suite (r270)
+- cross_law_transcode target — µ ↔ A trait-surface composition (r262)
+- drop release-plz.toml — use release-plz defaults across the workspace
+- voice-distribution harness (r247)
+- indexed-write trait-surface hot loops (r236)
+- compile-time 64 KiB S16 -> byte encode LUT for both laws (r230)
+- factory_params target hammering parameter-validation surface (r224)
+- promote docs_corpus fixtures from ReportOnly to BitExact (r218)
+- streaming mode in profile driver (r213)
+- streaming session harness (r206)
+
 ### Fixed
 
 - test data: corrected the `TABLE3_MU_TO_A` and `TABLE4_A_TO_MU`
