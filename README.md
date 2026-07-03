@@ -1,5 +1,7 @@
 # oxideav-g711
 
+[![CI](https://github.com/OxideAV/oxideav-g711/actions/workflows/ci.yml/badge.svg)](https://github.com/OxideAV/oxideav-g711/actions/workflows/ci.yml) [![crates.io](https://img.shields.io/crates/v/oxideav-g711.svg)](https://crates.io/crates/oxideav-g711) [![docs.rs](https://docs.rs/oxideav-g711/badge.svg)](https://docs.rs/oxideav-g711) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Pure-Rust **ITU-T G.711** codec — both µ-law and A-law variants,
 decoder + encoder. Spec-exact lookup tables, deterministic per-sample
 companding, bit-exact against the formulas in G.711 §2 / §3. Zero C
