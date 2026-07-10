@@ -196,13 +196,13 @@ instead; they delegate to the same `const fn` that populates the LUT.
 
 ## Benchmarks
 
-Seven Criterion harnesses ship under `benches/` for the per-sample LUT
+Eight Criterion harnesses ship under `benches/` for the per-sample LUT
 decode + arithmetic encode hot paths and the trait-surface framing
 overhead. Every input is synthesised in-bench from a deterministic
 xorshift seed — no fixture files, no external corpus.
 
 ```sh
-cargo bench -p oxideav-g711 --bench {decode,encode,roundtrip,streaming,voice,segment,cacheladder}
+cargo bench -p oxideav-g711 --bench {decode,encode,roundtrip,streaming,voice,segment,cacheladder,batch}
 ```
 
 `decode` / `encode` / `roundtrip` / `streaming` use a uniform-random
@@ -215,7 +215,11 @@ single law + path across a 1 KiB → 4 MiB geometric size ladder so the
 L1 → L2 → L3 → DRAM throughput knee of the decode LUT, the
 trait-surface store path, and the arithmetic-encode inner loop is
 visible as a curve (per-element throughput keeps every rung
-comparable). A consolidated cross-distribution baseline table lives in
+comparable). `batch` (r406) pins the three call surfaces — per-sample
+loop, batch slice helpers, trait objects — against each other in one
+group per direction × law, isolating the framing + per-call-allocation
+premium of the trait surface (the inner loops are shared since r406).
+A consolidated cross-distribution baseline table lives in
 [`BENCHMARKS.md`](BENCHMARKS.md).
 
 ## Fuzzing

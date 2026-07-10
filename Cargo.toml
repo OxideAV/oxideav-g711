@@ -105,6 +105,20 @@ harness = false
 name = "cacheladder"
 harness = false
 
+# Round 406 (depth-mode benchmarks, batch-API follow-up): pins the
+# three call surfaces (per-sample loop, r406 batch slice helpers,
+# trait surface) against each other in one Criterion group per
+# direction × law, at the 96 000-element 8 ch / 48 kHz / 250 ms shape.
+# Because the trait-surface hot loops delegate to the slice helpers
+# since r406, the `trait` − `slice_le` spread within a group is the
+# isolated cost of packet/frame framing + the per-call output Vec
+# allocation. Plus one µ-law group for the §3.2 zero-suppress slice
+# form. Same `cargo bench -p oxideav-g711 --bench batch` shape as the
+# other benches.
+[[bench]]
+name = "batch"
+harness = false
+
 # Round 189 (depth-mode profiling): flat measure-this-thing driver
 # for `samply` / `cargo flamegraph` / `perf record`. Mirrors the
 # `benches/{decode,encode,roundtrip}.rs` scenarios byte-for-byte so

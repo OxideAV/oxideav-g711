@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   adversarial slice lengths — plus trait-surface delegation equality,
   the full-domain zero-suppress wire contract, empty-slice no-ops and
   length-mismatch panics.
+- `batch` Criterion harness (r406): one group per direction × law
+  pinning the three call surfaces (per-sample loop / batch slice /
+  trait object) against each other at the 96 000-element bulk shape,
+  plus a µ-law §3.2 zero-suppress group. Because the trait hot loops
+  delegate to the slice helpers, the `trait` − `slice_le` spread is
+  the isolated framing + per-call-allocation premium (measured ~26%
+  on decode, ~14% on encode). Baseline table recorded in
+  BENCHMARKS.md.
 
 ## [0.0.8](https://github.com/OxideAV/oxideav-g711/compare/v0.0.7...v0.0.8) - 2026-07-03
 

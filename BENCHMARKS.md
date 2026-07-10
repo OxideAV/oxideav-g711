@@ -17,6 +17,7 @@ cargo bench -p oxideav-g711 --bench streaming
 cargo bench -p oxideav-g711 --bench voice
 cargo bench -p oxideav-g711 --bench segment
 cargo bench -p oxideav-g711 --bench cacheladder
+cargo bench -p oxideav-g711 --bench batch
 ```
 
 The first six harnesses share the **distribution** axis below (fixed
@@ -114,6 +115,45 @@ store-insensitive". The sweep makes that claim falsifiable across the
 whole L1 → DRAM range on a given machine, so a future store-strategy or
 SIMD change can see exactly where its win turns on and whether it
 regresses the small-buffer case.
+
+## Call-surface decomposition (r406 — `batch`)
+
+The r406 batch (slice) API gives every direction × law a third call
+surface between the per-sample helpers and the trait objects, and the
+trait-surface hot loops now delegate to the slice helpers — so within
+one Criterion group the **`trait` − `slice_le` spread is exactly the
+cost of packet/frame framing + the per-call output `Vec` allocation**
+(the inner loop is shared). All rows: 96 000 uniform-random elements
+(the 8 ch / 48 kHz / 250 ms shape), throughput per input byte (decode)
+or per input sample (encode). r406 baseline, measured under parallel
+build load — treat within-group ratios as the signal:
+
+| group | per_sample | slice | slice_le | trait |
+| --- | --- | --- | --- | --- |
+| decode µ-law | ~1.36 GiB/s | ~5.01 GiB/s | ~4.99 GiB/s | ~3.71 GiB/s |
+| decode A-law | ~1.29 GiB/s | ~4.77 GiB/s | ~4.83 GiB/s | ~3.62 GiB/s |
+| encode µ-law | ~1.25 GiB/s | ~4.73 GiB/s | ~3.48 GiB/s | ~3.00 GiB/s |
+| encode A-law | ~1.29 GiB/s | ~4.56 GiB/s | ~3.44 GiB/s | ~2.96 GiB/s |
+| encode µ-law zero-suppress | ~4.61 GiB/s | ~3.59 GiB/s | — | — |
+
+Reading the decomposition:
+
+- **`slice` vs `trait`**: the framing + allocation premium is ~26%
+  on decode and ~14% on encode at this size — that is the entire
+  remaining gap, since the loops are shared. Callers with reusable
+  buffers get it back by calling the slice helpers directly.
+- **`per_sample` is not "the LUT is slow"**: that row consumes each
+  sample into a serial accumulator (the historical bench shape), so
+  it measures a loop-carried dependency chain, not the table. The
+  independent-store slice rows are the honest bulk-throughput
+  numbers.
+- **`slice_le` encode < `slice` encode**: the LE form pays the
+  byte-pair deserialisation on load; decode's LE form pays nothing
+  because the store is a fixed 2-byte copy either way.
+- **zero-suppress `slice` < plain encode `slice`** (~3.6 vs ~4.7):
+  the §3.2 rewrite is a compare + select per store on top of the LUT
+  load. This is the one row with visible headroom (a dedicated
+  compile-time zero-suppress LUT would close it).
 
 ## Profiling driver
 
