@@ -134,7 +134,7 @@ build load — treat within-group ratios as the signal:
 | decode A-law | ~1.29 GiB/s | ~4.77 GiB/s | ~4.83 GiB/s | ~3.62 GiB/s |
 | encode µ-law | ~1.25 GiB/s | ~4.73 GiB/s | ~3.48 GiB/s | ~3.00 GiB/s |
 | encode A-law | ~1.29 GiB/s | ~4.56 GiB/s | ~3.44 GiB/s | ~2.96 GiB/s |
-| encode µ-law zero-suppress | ~4.61 GiB/s | ~3.59 GiB/s | — | — |
+| encode µ-law zero-suppress | ~4.89 GiB/s | ~4.43 GiB/s | — | — |
 
 Reading the decomposition:
 
@@ -150,10 +150,14 @@ Reading the decomposition:
 - **`slice_le` encode < `slice` encode**: the LE form pays the
   byte-pair deserialisation on load; decode's LE form pays nothing
   because the store is a fixed 2-byte copy either way.
-- **zero-suppress `slice` < plain encode `slice`** (~3.6 vs ~4.7):
-  the §3.2 rewrite is a compare + select per store on top of the LUT
-  load. This is the one row with visible headroom (a dedicated
-  compile-time zero-suppress LUT would close it).
+- **zero-suppress ≈ plain encode**: the first r406 measurement had
+  the branch-per-store form at ~3.59 GiB/s on the slice row, ~24%
+  behind plain `encode_slice` — the §3.2 rewrite cost a compare +
+  select per store on top of the LUT load. Folding the rewrite into
+  a dedicated compile-time table (`MULAW_ENCODE_ZERO_SUPPRESS`,
+  r406) closed the gap: **3.59 → 4.43 GiB/s (+23.5%)** on the slice
+  row, bringing the suppressed wire within ~6% of the plain law
+  (both are now a single 64 KiB-LUT load per sample).
 
 ## Profiling driver
 

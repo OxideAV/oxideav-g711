@@ -118,7 +118,11 @@ bit-clock recovery. It is byte-identical to `encode_sample` except the
 single codeword that would be sent as `00000000` is rewritten to the
 spec-mandated `00000010` (`mulaw::MULAW_ZERO_SUPPRESS_CODEWORD`). The
 decoder is unaffected — a standard `decode_sample` handles the
-substituted `0x02` like any other byte.
+substituted `0x02` like any other byte. The rewrite is folded into a
+dedicated compile-time table (`tables::MULAW_ENCODE_ZERO_SUPPRESS`,
+r406), so the suppressed wire costs the same single LUT load as the
+plain law; a CI test pins the table against the rewritten plain LUT
+on all 65 536 entries.
 
 ### Encode hot path — compile-time S16 → byte LUTs
 

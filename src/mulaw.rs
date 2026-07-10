@@ -9,7 +9,9 @@ use oxideav_core::{
 use oxideav_core::{Decoder, Encoder};
 use std::collections::VecDeque;
 
-use crate::tables::{mulaw_encode_arith, MULAW_DECODE, MULAW_DECODE_LE, MULAW_ENCODE};
+use crate::tables::{
+    mulaw_encode_arith, MULAW_DECODE, MULAW_DECODE_LE, MULAW_ENCODE, MULAW_ENCODE_ZERO_SUPPRESS,
+};
 
 /// Decode one µ-law byte to a linear S16 sample. Direct LUT lookup
 /// against [`MULAW_DECODE`].
@@ -65,14 +67,16 @@ pub const MULAW_ZERO_SUPPRESS_CODEWORD: u8 = 0x02;
 /// [`encode_sample`] on all inputs that do not quantise to the all-zero
 /// codeword. The suppression is purely a transmit-side concern: a standard
 /// [`decode_sample`] handles the substituted `0x02` like any other byte.
+///
+/// Since r406 this is a direct lookup against
+/// [`MULAW_ENCODE_ZERO_SUPPRESS`] — the §3.2 rewrite is folded into the
+/// table at compile time, so the suppressed wire costs the same single
+/// load as the plain law instead of a load + compare + select. A CI
+/// test pins the table against the rewritten plain LUT on all 65 536
+/// entries.
 #[inline]
 pub fn encode_sample_zero_suppress(sample: i16) -> u8 {
-    let byte = encode_sample(sample);
-    if byte == MULAW_ZERO_CODEWORD {
-        MULAW_ZERO_SUPPRESS_CODEWORD
-    } else {
-        byte
-    }
+    MULAW_ENCODE_ZERO_SUPPRESS[sample as u16 as usize]
 }
 
 /// Arithmetic µ-law encode (ITU-T G.711 §3.2). Same result as
@@ -203,7 +207,7 @@ pub fn encode_slice_zero_suppress(input: &[i16], output: &mut [u8]) {
         "G.711 µ-law encode_slice_zero_suppress: input and output lengths must match"
     );
     for (&s, dst) in input.iter().zip(output.iter_mut()) {
-        *dst = encode_sample_zero_suppress(s);
+        *dst = MULAW_ENCODE_ZERO_SUPPRESS[s as u16 as usize];
     }
 }
 

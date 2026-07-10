@@ -22,6 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   adversarial slice lengths — plus trait-surface delegation equality,
   the full-domain zero-suppress wire contract, empty-slice no-ops and
   length-mismatch panics.
+- compile-time µ-law zero-suppress encode LUT (r406):
+  `tables::MULAW_ENCODE_ZERO_SUPPRESS` folds the §3.2 all-zero
+  rewrite into a third 64 KiB table, replacing the per-sample
+  compare + select in `encode_sample_zero_suppress` /
+  `encode_slice_zero_suppress` with a single load. Measured
+  3.59 → 4.43 GiB/s (+23.5%) on the bulk slice row, bringing the
+  suppressed wire within ~6% of the plain law. Behaviour unchanged —
+  a new full-domain tables test pins the LUT against the rewritten
+  plain table on all 65 536 entries, and the existing zero-suppress
+  suites (wire contract, fuzz target) are untouched oracles.
 - `batch` Criterion harness (r406): one group per direction × law
   pinning the three call surfaces (per-sample loop / batch slice /
   trait object) against each other at the 96 000-element bulk shape,

@@ -8,7 +8,9 @@
 //! [`alaw_encode_arith`]) at every `i16` value in a `const fn` loop, so the
 //! LUT is bit-exact-by-construction relative to the spec formulas — there
 //! is no second source of truth. Each LUT costs **64 KiB** of static data
-//! (`[u8; 65536]`).
+//! (`[u8; 65536]`). A third 64 KiB encode table,
+//! [`MULAW_ENCODE_ZERO_SUPPRESS`], folds the §3.2 all-zero-suppression
+//! rewrite into the µ-law entries at compile time.
 //!
 //! Reference: ITU-T Recommendation G.711 (11/88), "Pulse code modulation
 //! (PCM) of voice frequencies", §2 (A-law) and §3 (µ-law).
@@ -256,6 +258,35 @@ pub static ALAW_ENCODE: [u8; 65536] = {
     t
 };
 
+/// Compile-time 65536-entry µ-law **all-zero-suppressed** encode LUT
+/// (ITU-T G.711 §3.2). Entry `i` is [`mulaw_encode_arith`]`(i as i16)`
+/// with the single all-zero codeword
+/// ([`crate::mulaw::MULAW_ZERO_CODEWORD`]) rewritten to the spec
+/// replacement `00000010`
+/// ([`crate::mulaw::MULAW_ZERO_SUPPRESS_CODEWORD`]) — the same
+/// definitional composition [`crate::mulaw::encode_sample_zero_suppress`]
+/// exposes, folded into the table at compile time so the suppressed
+/// wire costs the same single load as the plain law (r406: the
+/// branch-per-store form measured ~24% slower than [`MULAW_ENCODE`]
+/// on the bulk slice path; this table closes that gap). Same
+/// single-source-of-truth argument as [`MULAW_ENCODE`]: the arithmetic
+/// formula populates every entry, and a CI test pins the rewrite
+/// against the plain table on all 65 536 entries.
+pub static MULAW_ENCODE_ZERO_SUPPRESS: [u8; 65536] = {
+    let mut t = [0u8; 65536];
+    let mut i: u32 = 0;
+    while i < 65536 {
+        let b = mulaw_encode_arith(i as i16);
+        t[i as usize] = if b == crate::mulaw::MULAW_ZERO_CODEWORD {
+            crate::mulaw::MULAW_ZERO_SUPPRESS_CODEWORD
+        } else {
+            b
+        };
+        i += 1;
+    }
+    t
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,6 +351,26 @@ mod tests {
                 ALAW_DECODE_LE[b as usize],
                 ALAW_DECODE[b as usize].to_le_bytes(),
                 "A-law LE byte-pair LUT diverged at {b:#x}"
+            );
+        }
+    }
+
+    #[test]
+    fn zero_suppress_lut_is_the_rewritten_plain_lut() {
+        // Definitional cross-check over the entire domain: the §3.2
+        // zero-suppress table must equal the plain encode table with
+        // exactly the all-zero codeword rewritten to the spec
+        // replacement, and nothing else changed.
+        for i in 0..65536usize {
+            let plain = MULAW_ENCODE[i];
+            let expected = if plain == crate::mulaw::MULAW_ZERO_CODEWORD {
+                crate::mulaw::MULAW_ZERO_SUPPRESS_CODEWORD
+            } else {
+                plain
+            };
+            assert_eq!(
+                MULAW_ENCODE_ZERO_SUPPRESS[i], expected,
+                "zero-suppress LUT diverged from the rewritten plain LUT at index {i}"
             );
         }
     }
