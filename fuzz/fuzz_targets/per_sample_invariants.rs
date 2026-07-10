@@ -59,6 +59,17 @@
 //! An input shorter than 3 bytes is treated as a single op at chunk
 //! index 0. Inputs ≥ 3 bytes get multiple ops per iteration so the
 //! fuzzer covers many (law, side, value) triples per execution.
+//!
+//! ## r406 batch-surface cross-check
+//!
+//! After the op stream, the raw input is replayed through the r406
+//! batch (slice) helpers — `decode_slice`, `decode_slice_to_le_bytes`,
+//! `encode_slice`, `encode_slice_from_le_bytes`, both laws — and every
+//! output element is asserted equal to the corresponding single-sample
+//! function. The exhaustive CI suite (`tests/batch_slice_api.rs`)
+//! already pins this equality over the complete domains; the fuzz
+//! replay keeps the *slice plumbing* (length handling, positional
+//! independence on attacker-shaped buffers) under continuous fire.
 
 use libfuzzer_sys::fuzz_target;
 use oxideav_g711::{alaw, mulaw};
@@ -207,5 +218,69 @@ fuzz_target!(|data: &[u8]| {
                 );
             }
         }
+    }
+
+    // ---- r406 batch-surface cross-check ----
+    //
+    // Replay the raw input through the slice helpers and pin every
+    // element to the single-sample oracle. Cap the replay length so a
+    // pathological max-size input cannot dominate the iteration.
+    let n = data.len().min(4096);
+    let bytes = &data[..n];
+
+    // Decode side, both laws, both output layouts.
+    let mut pcm = vec![0i16; n];
+    let mut le = vec![0u8; n * 2];
+    mulaw::decode_slice(bytes, &mut pcm);
+    mulaw::decode_slice_to_le_bytes(bytes, &mut le);
+    for (i, &b) in bytes.iter().enumerate() {
+        let want = mulaw::decode_sample(b);
+        assert_eq!(pcm[i], want, "µ-law decode_slice diverged at {i}");
+        assert_eq!(
+            le[2 * i..2 * i + 2],
+            want.to_le_bytes(),
+            "µ-law decode_slice_to_le_bytes diverged at {i}"
+        );
+    }
+    alaw::decode_slice(bytes, &mut pcm);
+    alaw::decode_slice_to_le_bytes(bytes, &mut le);
+    for (i, &b) in bytes.iter().enumerate() {
+        let want = alaw::decode_sample(b);
+        assert_eq!(pcm[i], want, "A-law decode_slice diverged at {i}");
+        assert_eq!(
+            le[2 * i..2 * i + 2],
+            want.to_le_bytes(),
+            "A-law decode_slice_to_le_bytes diverged at {i}"
+        );
+    }
+
+    // Encode side: reinterpret the even prefix as LE i16 samples.
+    let even = n & !1;
+    let le_pcm = &bytes[..even];
+    let samples: Vec<i16> = le_pcm
+        .chunks_exact(2)
+        .map(|p| i16::from_le_bytes([p[0], p[1]]))
+        .collect();
+    let mut wire = vec![0u8; samples.len()];
+    let mut wire_le = vec![0u8; samples.len()];
+    mulaw::encode_slice(&samples, &mut wire);
+    mulaw::encode_slice_from_le_bytes(le_pcm, &mut wire_le);
+    for (i, &s) in samples.iter().enumerate() {
+        let want = mulaw::encode_sample(s);
+        assert_eq!(wire[i], want, "µ-law encode_slice diverged at {i}");
+        assert_eq!(
+            wire_le[i], want,
+            "µ-law encode_slice_from_le_bytes diverged at {i}"
+        );
+    }
+    alaw::encode_slice(&samples, &mut wire);
+    alaw::encode_slice_from_le_bytes(le_pcm, &mut wire_le);
+    for (i, &s) in samples.iter().enumerate() {
+        let want = alaw::encode_sample(s);
+        assert_eq!(wire[i], want, "A-law encode_slice diverged at {i}");
+        assert_eq!(
+            wire_le[i], want,
+            "A-law encode_slice_from_le_bytes diverged at {i}"
+        );
     }
 });

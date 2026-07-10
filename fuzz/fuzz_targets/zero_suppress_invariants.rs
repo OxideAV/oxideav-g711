@@ -28,11 +28,12 @@
 //!    segment-7 step. This is the §3.2 "move by one decision interval"
 //!    contract, not an arbitrary jump.
 //!
-//! These properties hold *by construction* in the crate (the suppress
-//! helper is `encode_sample` plus a single equality rewrite); the fuzzer
-//! drives them across attacker-chosen i16 sequences as a regression net
-//! against any future change to the suppression rewrite or the underlying
-//! encode LUT.
+//! These properties hold *by construction* in the crate (the rewrite is
+//! folded into the compile-time `MULAW_ENCODE_ZERO_SUPPRESS` table, whose
+//! entries are the plain-law formula plus a single equality rewrite); the
+//! fuzzer drives them across attacker-chosen i16 sequences as a regression
+//! net against any future change to the suppression table or the
+//! underlying encode LUT.
 //!
 //! ## Fuzz input layout
 //!
@@ -40,11 +41,18 @@
 //! samples (`chunks(2)`); a trailing odd byte is zero-extended into one
 //! final sample. An empty input still exercises sample `0` so trivial
 //! inputs cover the invariants.
+//!
+//! Since r406 the same sample sequence is also replayed through the
+//! batch form ([`encode_slice_zero_suppress`], which since r406 indexes
+//! the dedicated compile-time `MULAW_ENCODE_ZERO_SUPPRESS` table) and
+//! each output byte is asserted equal to the per-sample helper — so a
+//! future divergence between the suppress LUT, the per-sample wrapper
+//! and the slice loop trips here as well as in CI.
 
 use libfuzzer_sys::fuzz_target;
 use oxideav_g711::mulaw::{
-    decode_sample, encode_sample, encode_sample_zero_suppress, MULAW_ZERO_CODEWORD,
-    MULAW_ZERO_SUPPRESS_CODEWORD,
+    decode_sample, encode_sample, encode_sample_zero_suppress, encode_slice_zero_suppress,
+    MULAW_ZERO_CODEWORD, MULAW_ZERO_SUPPRESS_CODEWORD,
 };
 
 /// Check the three §3.2 suppression invariants for a single i16 sample.
@@ -99,9 +107,24 @@ fuzz_target!(|data: &[u8]| {
         return;
     }
 
+    let mut samples = Vec::with_capacity(data.len() / 2 + 1);
     for chunk in data.chunks(2) {
         let lo = chunk[0];
         let hi = chunk.get(1).copied().unwrap_or(0);
-        check_sample(i16::from_le_bytes([lo, hi]));
+        let s = i16::from_le_bytes([lo, hi]);
+        check_sample(s);
+        samples.push(s);
+    }
+
+    // r406 batch-surface cross-check: the slice form must agree with
+    // the per-sample helper byte-for-byte on the same sequence.
+    let mut wire = vec![0u8; samples.len()];
+    encode_slice_zero_suppress(&samples, &mut wire);
+    for (i, &s) in samples.iter().enumerate() {
+        assert_eq!(
+            wire[i],
+            encode_sample_zero_suppress(s),
+            "encode_slice_zero_suppress diverged from the per-sample helper at index {i}"
+        );
     }
 });

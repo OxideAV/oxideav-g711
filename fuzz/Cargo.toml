@@ -45,7 +45,9 @@ cargo-fuzz = true
 #   encode(s)`). These properties hold *by construction* in the
 #   crate; the fuzzer drives them across attacker-chosen i16 / u8
 #   sequences as a regression net against future hot-path
-#   refactors.
+#   refactors. Since r406 the raw input is also replayed through
+#   the batch (slice) helpers of both laws and pinned element-wise
+#   to the single-sample oracle.
 # - **`streaming_pipeline`** (r201): multi-frame / multi-packet
 #   session through one encoder + decoder pair. Exercises the
 #   encoder's `VecDeque<Packet>` queue (FIFO order, eager vs.
@@ -93,6 +95,9 @@ cargo-fuzz = true
 #   codeword is rewritten to exactly the spec `00000010` replacement,
 #   and the substituted word decodes one uniform segment-7 step inward
 #   from the suppressed all-zero word (the decoder is untouched).
+#   Since r406 the same sequence is replayed through
+#   `encode_slice_zero_suppress` (the compile-time suppress-LUT
+#   path) and pinned byte-for-byte to the per-sample helper.
 [dependencies]
 libfuzzer-sys = "0.4"
 oxideav-core = "0.1"

@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "oxideav-g711"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "oxideav-core",
 ]

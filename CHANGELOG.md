@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a new full-domain tables test pins the LUT against the rewritten
   plain table on all 65 536 entries, and the existing zero-suppress
   suites (wire contract, fuzz target) are untouched oracles.
+- fuzz oracle extension for the batch surface (r406): the
+  `per_sample_invariants` target now replays its raw input through all
+  eight slice helpers (both laws, both layouts) and pins every element
+  to the single-sample oracle; the `zero_suppress_invariants` target
+  replays its sample sequence through `encode_slice_zero_suppress`
+  (the suppress-LUT path). All seven targets re-run bounded post-change
+  — ~66M total executions, zero crashes, no new corpus artifacts.
 - `batch` Criterion harness (r406): one group per direction × law
   pinning the three call surfaces (per-sample loop / batch slice /
   trait object) against each other at the 96 000-element bulk shape,
