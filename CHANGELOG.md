@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.9](https://github.com/OxideAV/oxideav-g711/compare/v0.0.8...v0.0.9) - 2026-07-10
+
+### Other
+
+- g711 fuzz: replay batch slice helpers against the per-sample oracle in per_sample_invariants + zero_suppress_invariants; bounded 7-target sweep clean (r406)
+- fold section-3.2 zero-suppress rewrite into a compile-time LUT — bulk slice row 3.59 -> 4.43 GiB/s (+23.5%), full-domain table cross-check (r406)
+- batch call-surface decomposition bench — per-sample vs slice vs trait per direction x law, baseline recorded (r406)
+- batch (slice) conversion API — allocation-free bulk helpers, trait-surface delegation, exhaustive-domain equivalence suite (r406)
+- add CI / crates.io / docs.rs / MIT-license badges
+
 ### Added
 
 - batch (slice) conversion API (r406): allocation-free bulk helpers in
