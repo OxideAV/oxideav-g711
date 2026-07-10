@@ -22,6 +22,20 @@
 //! inversion. There is no signal processing state, so each byte /sample
 //! is independent and packets may be arbitrary-length.
 //!
+//! Three call surfaces expose the same per-sample math:
+//!
+//! - **single-sample** — [`mulaw::decode_sample`] / [`mulaw::encode_sample`]
+//!   (and the A-law twins);
+//! - **batch (slice)** — allocation-free bulk conversion over
+//!   caller-provided buffers: [`mulaw::decode_slice`],
+//!   [`mulaw::encode_slice`], the little-endian byte-plane forms
+//!   [`mulaw::decode_slice_to_le_bytes`] /
+//!   [`mulaw::encode_slice_from_le_bytes`], the §3.2
+//!   [`mulaw::encode_slice_zero_suppress`], and the A-law twins;
+//! - **trait surface** — [`oxideav_core::Decoder`] /
+//!   [`oxideav_core::Encoder`] objects from the factories / registry,
+//!   whose hot loops delegate to the batch helpers.
+//!
 //! # Registration
 //!
 //! [`register`] wires up both laws under each of their aliases via

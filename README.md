@@ -77,6 +77,38 @@ structs are also constructible via `mulaw::make_decoder` /
 `alaw::make_decoder` / etc. for full control over construction without
 the registry lookup.
 
+### Batch (slice) conversion
+
+For bulk conversion over buffers you already own — a jitter buffer, a
+ring buffer, an FFI boundary — each law module exposes allocation-free
+slice helpers whose output is defined element-by-element by the
+single-sample functions:
+
+```rust
+use oxideav_g711::{mulaw, alaw};
+
+let wire = [0x7Fu8, 0xFF, 0x02];
+let mut pcm = [0i16; 3];
+mulaw::decode_slice(&wire, &mut pcm);
+
+let mut bytes = [0u8; 3];
+alaw::encode_slice(&pcm, &mut bytes);
+```
+
+- `decode_slice(&[u8], &mut [i16])` — one S16 per codeword.
+- `decode_slice_to_le_bytes(&[u8], &mut [u8])` — writes the samples as
+  little-endian byte pairs (the raw `AudioFrame` plane layout).
+- `encode_slice(&[i16], &mut [u8])` — one codeword per S16.
+- `encode_slice_from_le_bytes(&[u8], &mut [u8])` — reads the input as
+  little-endian S16 byte pairs.
+- `mulaw::encode_slice_zero_suppress(&[i16], &mut [u8])` — the §3.2
+  all-zero-suppressed wire (µ-law only).
+
+The trait-surface hot loops delegate to these same helpers, so the
+three call surfaces (single-sample, batch, trait) cannot drift apart;
+an exhaustive CI suite (`tests/batch_slice_api.rs`) pins the
+equivalence over all 256 codewords and all 65 536 S16 samples per law.
+
 ### µ-law all-zero suppression (G.711 §3.2)
 
 `mulaw::encode_sample_zero_suppress` is a transmit-side variant of

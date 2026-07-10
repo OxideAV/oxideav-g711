@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- batch (slice) conversion API (r406): allocation-free bulk helpers in
+  both law modules — `decode_slice`, `decode_slice_to_le_bytes`,
+  `encode_slice`, `encode_slice_from_le_bytes`, plus the µ-law §3.2
+  `encode_slice_zero_suppress`. Each helper is defined
+  element-by-element by the corresponding single-sample function; the
+  trait-surface decoder/encoder hot loops now delegate to the LE-byte
+  forms, making the batch helpers the single source of truth for the
+  bulk loops. An exhaustive CI suite (`tests/batch_slice_api.rs`, 17
+  tests) pins per-sample equivalence over the complete domains — all
+  256 codewords and all 65 536 S16 samples per law, re-chunked at
+  adversarial slice lengths — plus trait-surface delegation equality,
+  the full-domain zero-suppress wire contract, empty-slice no-ops and
+  length-mismatch panics.
+
 ## [0.0.8](https://github.com/OxideAV/oxideav-g711/compare/v0.0.7...v0.0.8) - 2026-07-03
 
 ### Added

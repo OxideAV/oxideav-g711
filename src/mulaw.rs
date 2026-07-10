@@ -95,6 +95,118 @@ pub fn encode_sample_arith(sample: i16) -> u8 {
     mulaw_encode_arith(sample)
 }
 
+// -------------- batch (slice) helpers --------------
+//
+// Allocation-free bulk conversion over caller-provided buffers. Each
+// helper is the exact loop the trait surface runs (the decoder /
+// encoder below delegate to `decode_slice_to_le_bytes` /
+// `encode_slice_from_le_bytes`), exposed so callers that already own
+// their buffers — a jitter buffer, a ring buffer, an FFI boundary —
+// can convert in place-adjacent memory without constructing a
+// `Packet` / `Frame` pair or paying a per-call `Vec` allocation.
+// Every output value is defined per-sample by the corresponding
+// single-sample function; the slice forms add no state and no
+// rounding of their own.
+
+/// Decode a slice of µ-law bytes into a caller-provided S16 buffer.
+/// `output[i]` is exactly [`decode_sample`]`(input[i])` for every `i`.
+///
+/// # Panics
+///
+/// Panics if `input.len() != output.len()`.
+pub fn decode_slice(input: &[u8], output: &mut [i16]) {
+    assert_eq!(
+        input.len(),
+        output.len(),
+        "G.711 µ-law decode_slice: input and output lengths must match"
+    );
+    for (&b, dst) in input.iter().zip(output.iter_mut()) {
+        *dst = MULAW_DECODE[b as usize];
+    }
+}
+
+/// Decode a slice of µ-law bytes into a caller-provided buffer of
+/// **little-endian S16 byte pairs** — `output[2*i..2*i+2]` is exactly
+/// [`decode_sample`]`(input[i]).to_le_bytes()`. This is the loop the
+/// trait-surface decoder ([`UlawDecoder`]) runs; it indexes the
+/// pre-serialized [`MULAW_DECODE_LE`] table so each sample is a single
+/// fixed-width 2-byte copy from `.rodata`.
+///
+/// # Panics
+///
+/// Panics if `output.len() != input.len() * 2`.
+pub fn decode_slice_to_le_bytes(input: &[u8], output: &mut [u8]) {
+    assert_eq!(
+        input.len() * 2,
+        output.len(),
+        "G.711 µ-law decode_slice_to_le_bytes: output must be exactly 2 bytes per input byte"
+    );
+    for (&b, dst) in input.iter().zip(output.chunks_exact_mut(2)) {
+        dst.copy_from_slice(&MULAW_DECODE_LE[b as usize]);
+    }
+}
+
+/// Encode a slice of S16 samples into a caller-provided µ-law byte
+/// buffer. `output[i]` is exactly [`encode_sample`]`(input[i])` for
+/// every `i`.
+///
+/// # Panics
+///
+/// Panics if `input.len() != output.len()`.
+pub fn encode_slice(input: &[i16], output: &mut [u8]) {
+    assert_eq!(
+        input.len(),
+        output.len(),
+        "G.711 µ-law encode_slice: input and output lengths must match"
+    );
+    for (&s, dst) in input.iter().zip(output.iter_mut()) {
+        *dst = MULAW_ENCODE[s as u16 as usize];
+    }
+}
+
+/// Encode a slice of **little-endian S16 byte pairs** into a
+/// caller-provided µ-law byte buffer — `output[i]` is exactly
+/// [`encode_sample`] applied to `i16::from_le_bytes(input[2*i..2*i+2])`.
+/// This is the loop the trait-surface encoder ([`UlawEncoder`]) runs on
+/// each frame's raw byte plane.
+///
+/// # Panics
+///
+/// Panics if `input.len() != output.len() * 2` (which also enforces
+/// that `input.len()` is even).
+pub fn encode_slice_from_le_bytes(input: &[u8], output: &mut [u8]) {
+    assert_eq!(
+        input.len(),
+        output.len() * 2,
+        "G.711 µ-law encode_slice_from_le_bytes: input must be exactly 2 bytes per output byte"
+    );
+    for (src, dst) in input.chunks_exact(2).zip(output.iter_mut()) {
+        let s = i16::from_le_bytes([src[0], src[1]]);
+        *dst = MULAW_ENCODE[s as u16 as usize];
+    }
+}
+
+/// Encode a slice of S16 samples into a caller-provided µ-law byte
+/// buffer with **all-zero suppression** (ITU-T G.711 §3.2) —
+/// `output[i]` is exactly [`encode_sample_zero_suppress`]`(input[i])`
+/// for every `i`: the all-zero octet never appears in `output`, and
+/// every sample that does not quantise to it is byte-identical to
+/// [`encode_slice`].
+///
+/// # Panics
+///
+/// Panics if `input.len() != output.len()`.
+pub fn encode_slice_zero_suppress(input: &[i16], output: &mut [u8]) {
+    assert_eq!(
+        input.len(),
+        output.len(),
+        "G.711 µ-law encode_slice_zero_suppress: input and output lengths must match"
+    );
+    for (&s, dst) in input.iter().zip(output.iter_mut()) {
+        *dst = encode_sample_zero_suppress(s);
+    }
+}
+
 // -------------- decoder --------------
 
 /// Build a boxed [`Decoder`] for G.711 µ-law with the given codec
@@ -164,18 +276,18 @@ impl Decoder for UlawDecoder {
             )));
         }
         let samples_per_channel = pkt.data.len() / ch;
-        // r289 hot loop: index the pre-serialized little-endian
-        // byte-pair LUT and store the two bytes with one
-        // `copy_from_slice`, replacing the r236 `[i16; 256]` load +
-        // per-iter `i16::to_le_bytes()` recomputation + two scalar
-        // stores. The LE LUT is byte-identical to `MULAW_DECODE` (it is
-        // built from it at compile time), so output is unchanged; the
-        // store collapses to a fixed-width 2-byte copy from `.rodata`.
-        // Measured ~+24% on the 8ch/48k decode row (3.56 → 4.68 GiB/s).
+        // r289 hot loop, extracted to the public batch helper in r406:
+        // index the pre-serialized little-endian byte-pair LUT and store
+        // the two bytes with one `copy_from_slice`, replacing the r236
+        // `[i16; 256]` load + per-iter `i16::to_le_bytes()` recomputation
+        // + two scalar stores. The LE LUT is byte-identical to
+        // `MULAW_DECODE` (it is built from it at compile time), so output
+        // is unchanged; the store collapses to a fixed-width 2-byte copy
+        // from `.rodata`. Measured ~+24% on the 8ch/48k decode row
+        // (3.56 → 4.68 GiB/s). The length invariant the helper asserts
+        // holds by construction (`out` is sized right here).
         let mut out = vec![0u8; pkt.data.len() * 2];
-        for (&b, dst) in pkt.data.iter().zip(out.chunks_exact_mut(2)) {
-            dst.copy_from_slice(&MULAW_DECODE_LE[b as usize]);
-        }
+        decode_slice_to_le_bytes(&pkt.data, &mut out);
         Ok(Frame::Audio(AudioFrame {
             samples: samples_per_channel as u32,
             pts: pkt.pts,
@@ -250,18 +362,15 @@ impl Encoder for UlawEncoder {
             return Err(Error::invalid("G.711 µ-law encoder: odd byte count"));
         }
         let n = bytes.len() / 2;
-        // r236 hot loop: pre-size the output, then zip the LE-S16 source
-        // pairs with `chunks_exact_mut(1)` over the destination so the
-        // codegen sees a direct slice-load + slice-store pair without
-        // a `Vec::push` bounds-check chain. `chunks_exact(2)` on the
-        // source still hands us the two LE halves; the trailing
-        // `chunks_exact(2).remainder()` is empty because `bytes.len()
-        // % 2 == 0` was just validated above.
+        // r236 hot loop, extracted to the public batch helper in r406:
+        // pre-size the output, then zip the LE-S16 source pairs against
+        // the destination so the codegen sees a direct slice-load +
+        // slice-store pair without a `Vec::push` bounds-check chain.
+        // The helper's length assert holds by construction — `out` is
+        // sized `bytes.len() / 2` and `bytes.len() % 2 == 0` was just
+        // validated above.
         let mut out = vec![0u8; n];
-        for (src, dst) in bytes.chunks_exact(2).zip(out.iter_mut()) {
-            let s = i16::from_le_bytes([src[0], src[1]]);
-            *dst = MULAW_ENCODE[s as u16 as usize];
-        }
+        encode_slice_from_le_bytes(bytes, &mut out);
         let mut pkt = Packet::new(0, self.time_base, out);
         pkt.pts = a.pts;
         pkt.dts = a.pts;
