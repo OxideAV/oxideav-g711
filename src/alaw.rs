@@ -1,5 +1,5 @@
 //! A-law (ITU-T G.711 §2) codec — single-sample conversion helpers plus
-//! [`AlawDecoder`] / [`AlawEncoder`] implementing the `oxideav_codec`
+//! [`AlawDecoder`] / [`AlawEncoder`] implementing the `oxideav_core`
 //! traits. Each encoded byte carries exactly one S16 PCM sample.
 
 use oxideav_core::{

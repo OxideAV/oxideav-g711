@@ -36,14 +36,15 @@ let mut params = CodecParameters::audio(CodecId::new("pcm_mulaw"));
 params.sample_rate = Some(8_000);
 params.channels = Some(1);
 
-let mut dec = ctx.codecs.make_decoder(&params)?;
+# let mulaw_bytes: Vec<u8> = vec![0xFF; 160];
+let mut dec = ctx.codecs.first_decoder(&params)?;
 dec.send_packet(&Packet::new(0, TimeBase::new(1, 8_000), mulaw_bytes))?;
 let Frame::Audio(a) = dec.receive_frame()? else { unreachable!() };
 // `a.data[0]` is interleaved S16 PCM.
 # Ok::<(), oxideav_core::Error>(())
 ```
 
-Encoder is symmetric — build with `ctx.codecs.make_encoder(&params)`,
+Encoder is symmetric — build with `ctx.codecs.first_encoder(&params)`,
 feed `Frame::Audio` with S16 PCM, get companded `Packet`s back. One
 output byte per input S16 sample, preserving interleave order across
 channels.
