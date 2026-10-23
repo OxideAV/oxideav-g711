@@ -332,10 +332,8 @@ fn profile_decode(iters_override: Option<u32>) {
         let t = Instant::now();
         for _ in 0..iters {
             let src = std::hint::black_box(&bytes);
-            for (&b, dst) in src.iter().zip(pcm_out.chunks_exact_mut(2)) {
-                let le = i16_lut[b as usize].to_le_bytes();
-                dst[0] = le[0];
-                dst[1] = le[1];
+            for (&b, dst) in src.iter().zip(pcm_out.as_chunks_mut::<2>().0) {
+                *dst = i16_lut[b as usize].to_le_bytes();
             }
             std::hint::black_box(&pcm_out);
         }
@@ -346,8 +344,8 @@ fn profile_decode(iters_override: Option<u32>) {
         let t = Instant::now();
         for _ in 0..iters {
             let src = std::hint::black_box(&bytes);
-            for (&b, dst) in src.iter().zip(pcm_out.chunks_exact_mut(2)) {
-                dst.copy_from_slice(&le_lut[b as usize]);
+            for (&b, dst) in src.iter().zip(pcm_out.as_chunks_mut::<2>().0) {
+                *dst = le_lut[b as usize];
             }
             std::hint::black_box(&pcm_out);
         }

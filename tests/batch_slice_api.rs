@@ -107,9 +107,9 @@ fn mulaw_decode_slice_to_le_bytes_matches_per_sample_over_full_domain() {
     let input = all_bytes();
     let mut out = vec![0u8; input.len() * 2];
     mulaw::decode_slice_to_le_bytes(&input, &mut out);
-    for (i, (&b, pair)) in input.iter().zip(out.chunks_exact(2)).enumerate() {
+    for (i, (&b, pair)) in input.iter().zip(out.as_chunks::<2>().0).enumerate() {
         assert_eq!(
-            pair,
+            *pair,
             mulaw::decode_sample(b).to_le_bytes(),
             "µ-law decode_slice_to_le_bytes diverged at index {i} (byte {b:#04x})"
         );
@@ -121,9 +121,9 @@ fn alaw_decode_slice_to_le_bytes_matches_per_sample_over_full_domain() {
     let input = all_bytes();
     let mut out = vec![0u8; input.len() * 2];
     alaw::decode_slice_to_le_bytes(&input, &mut out);
-    for (i, (&b, pair)) in input.iter().zip(out.chunks_exact(2)).enumerate() {
+    for (i, (&b, pair)) in input.iter().zip(out.as_chunks::<2>().0).enumerate() {
         assert_eq!(
-            pair,
+            *pair,
             alaw::decode_sample(b).to_le_bytes(),
             "A-law decode_slice_to_le_bytes diverged at index {i} (byte {b:#04x})"
         );

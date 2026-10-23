@@ -43,11 +43,7 @@ pub const fn mulaw_decode(b: u8) -> i16 {
     let exp = ((inv >> 4) & 0x07) as u32;
     let mant = (inv & 0x0F) as i32;
     let mag = (((mant << 3) + MULAW_BIAS) << exp) - MULAW_BIAS;
-    if sign == 0 {
-        mag as i16
-    } else {
-        (-mag) as i16
-    }
+    if sign == 0 { mag as i16 } else { (-mag) as i16 }
 }
 
 /// Compile-time 256-entry decode LUT. Indexed by the wire byte directly.
@@ -119,11 +115,7 @@ pub const fn alaw_decode(b: u8) -> i16 {
         ((mant << 4) + 0x108) << (exp - 1)
     };
     // A-law sign bit: 1 → positive, 0 → negative.
-    if sign != 0 {
-        mag as i16
-    } else {
-        (-mag) as i16
-    }
+    if sign != 0 { mag as i16 } else { (-mag) as i16 }
 }
 
 /// Compile-time 256-entry A-law decode LUT.

@@ -9,7 +9,7 @@ use oxideav_core::{
 use oxideav_core::{Decoder, Encoder};
 use std::collections::VecDeque;
 
-use crate::tables::{alaw_encode_arith, ALAW_DECODE, ALAW_DECODE_LE, ALAW_ENCODE};
+use crate::tables::{ALAW_DECODE, ALAW_DECODE_LE, ALAW_ENCODE, alaw_encode_arith};
 
 /// Decode one A-law byte to a linear S16 sample. Direct LUT lookup
 /// against [`ALAW_DECODE`].
@@ -99,8 +99,8 @@ pub fn decode_slice_to_le_bytes(input: &[u8], output: &mut [u8]) {
         output.len(),
         "G.711 A-law decode_slice_to_le_bytes: output must be exactly 2 bytes per input byte"
     );
-    for (&b, dst) in input.iter().zip(output.chunks_exact_mut(2)) {
-        dst.copy_from_slice(&ALAW_DECODE_LE[b as usize]);
+    for (&b, dst) in input.iter().zip(output.as_chunks_mut::<2>().0) {
+        *dst = ALAW_DECODE_LE[b as usize];
     }
 }
 
@@ -138,7 +138,7 @@ pub fn encode_slice_from_le_bytes(input: &[u8], output: &mut [u8]) {
         output.len() * 2,
         "G.711 A-law encode_slice_from_le_bytes: input must be exactly 2 bytes per output byte"
     );
-    for (src, dst) in input.chunks_exact(2).zip(output.iter_mut()) {
+    for (src, dst) in input.as_chunks::<2>().0.iter().zip(output.iter_mut()) {
         let s = i16::from_le_bytes([src[0], src[1]]);
         *dst = ALAW_ENCODE[s as u16 as usize];
     }

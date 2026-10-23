@@ -22,8 +22,8 @@
 //! pinned in `substituted_codeword_matches_spec_minus_7519` below.
 
 use oxideav_g711::mulaw::{
-    decode_sample, encode_sample, encode_sample_zero_suppress, MULAW_ZERO_CODEWORD,
-    MULAW_ZERO_SUPPRESS_CODEWORD,
+    MULAW_ZERO_CODEWORD, MULAW_ZERO_SUPPRESS_CODEWORD, decode_sample, encode_sample,
+    encode_sample_zero_suppress,
 };
 
 /// The literal codewords the spec names: the forbidden all-zero word and its

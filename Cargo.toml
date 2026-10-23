@@ -1,8 +1,8 @@
 [package]
 name = "oxideav-g711"
 version = "0.0.8"
-edition = "2021"
-rust-version = "1.80"
+edition = "2024"
+rust-version = "1.95"
 license = "MIT"
 authors = ["Mark Karpeles"]
 description = "Pure-Rust ITU-T G.711 μ-law and A-law (PSTN) codec — decoder + encoder"

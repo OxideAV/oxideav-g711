@@ -110,7 +110,7 @@ fn measure_and_assert(
 ) -> f64 {
     let sample_rate = 8_000u32;
     let n = sample_rate as usize; // 1 second
-                                  // -3 dBFS amplitude: 32767 * 10^(-3/20) ≈ 23197.
+    // -3 dBFS amplitude: 32767 * 10^(-3/20) ≈ 23197.
     let amplitude = S16_PEAK * 10.0_f64.powf(-3.0 / 20.0);
     let signal = synth_sine(freq_hz, sample_rate, amplitude, n);
     let reconstructed: Vec<i16> = signal.iter().map(|&s| decode(encode(s))).collect();
