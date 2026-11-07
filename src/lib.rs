@@ -48,6 +48,7 @@
 
 pub mod alaw;
 pub mod mulaw;
+#[doc(hidden)]
 pub mod tables;
 
 use oxideav_core::{CodecCapabilities, CodecId, CodecTag};

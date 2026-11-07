@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `#[doc(hidden)]` on the `tables` module (the precomputed expand / compress tables behind `alaw` / `mulaw`). No public enum or record needed `#[non_exhaustive]`: the encoder / decoder types keep their fields private.
+
+### Changed
+
 - edition 2024, MSRV 1.95
 
 ### Added
